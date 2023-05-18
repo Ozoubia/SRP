@@ -171,30 +171,56 @@ class Preprocessing():
             elif self.data_name == "mHealth":
                 data_path = 'datasets/mHealth'
                 file_names = sorted(glob.glob(os.path.join(data_path, "*.log")))
-                sampling_rate = 50
-                total_length = 0
-                file_boundaries_indice = []
-                isfirst = True
-                for f in tqdm(file_names, leave=False, desc="mHealth stitching"):
-                    Xy = np.loadtxt(f)
-                    X_long_part = Xy[:,:-1]
-                    y_long_part = Xy[:,-1]
-                    X_long_part = X_long_part[y_long_part!=0]
-                    y_long_part = y_long_part[y_long_part!=0]
-                    assert(np.sum(y_long_part==0)==0)
-                    total_length += len(X_long_part)
-                    if isfirst:
-                        X_long = X_long_part
-                        y_long = y_long_part
-                        isfirst = False
+                file_names_tr = file_names[:8]
+                file_names_tt = file_names[-2:]
+                sampling_rate_tr = 50
+                sampling_rate_tt = 50
+                total_length_tr = 0
+                total_length_tt = 0
+                file_boundaries_indice_tt = []
+                file_boundaries_indice_tr = []
+                isfirst_tr = True
+                isfirst_tt = True
+                for f in tqdm(file_names_tt, leave=False, desc="mHealth stitching"):
+                    Xy_tt = np.loadtxt(f)
+                    X_long_part_tt = Xy_tt[:,:-1]
+                    y_long_part_tt = Xy_tt[:,-1]
+                    X_long_part_tt = X_long_part_tt[y_long_part_tt!=0]
+                    y_long_part_tt = y_long_part_tt[y_long_part_tt!=0]
+                    assert(np.sum(y_long_part_tt==0)==0)
+                    total_length_tt += len(X_long_part_tt)
+                    if isfirst_tt:
+                        X_long_tt = X_long_part_tt
+                        y_long_tt = y_long_part_tt
+                        isfirst_tt = False
                     else:
-                        X_long = np.concatenate([X_long, X_long_part], axis=0)
-                        y_long = np.concatenate([y_long, y_long_part], axis=0)
-                    file_boundaries_indice.append(total_length)
-                print(y_long)
-                y_long -= 1
-                label_seg_list = self.generate_boundary_labels([y_long], {})
-                y_seg_long = label_seg_list[0]
+                        X_long_tt = np.concatenate([X_long_tt, X_long_part_tt], axis=0)
+                        y_long_tt = np.concatenate([y_long_tt, y_long_part_tt], axis=0)
+                    file_boundaries_indice_tt.append(total_length_tt)
+                
+                for f in tqdm(file_names_tr, leave=False, desc="mHealth stitching"):
+                    Xy_tr = np.loadtxt(f)
+                    X_long_part_tr = Xy_tr[:,:-1]
+                    y_long_part_tr = Xy_tr[:,-1]
+                    X_long_part_tr = X_long_part_tr[y_long_part_tr!=0]
+                    y_long_part_tr = y_long_part_tr[y_long_part_tr!=0]
+                    assert(np.sum(y_long_part_tr==0)==0)
+                    total_length_tr += len(X_long_part_tr)
+                    if isfirst_tr:
+                        X_long_tr = X_long_part_tr
+                        y_long_tr = y_long_part_tr
+                        isfirst_tr = False
+                    else:
+                        X_long_tr = np.concatenate([X_long_tr, X_long_part_tr], axis=0)
+                        y_long_tr = np.concatenate([y_long_tr, y_long_part_tr], axis=0)
+                    file_boundaries_indice_tr.append(total_length_tr)
+                #print(y_long_tr)
+                y_long_tr -= 1
+                y_long_tt -= 1
+                label_seg_list_tr = self.generate_boundary_labels([y_long_tr], {})
+                label_seg_list_tt = self.generate_boundary_labels([y_long_tt], {})
+                y_seg_long_tr = label_seg_list_tr[0]
+                y_seg_long_tt = label_seg_list_tt[0]
 
 
             elif self.data_name == "HAPT":
@@ -317,23 +343,39 @@ class Preprocessing():
                         y_long[start + int(np.rint((end - start)) / 2):end + 1] = converted2
 
 
-            X_long = self.long_time_series_normalization(X_long)
-            file_boundaries = np.zeros(y_seg_long.shape)
-            if len(file_boundaries_indice) > 0:
-                file_boundaries[np.array(file_boundaries_indice)-1]=1
+            X_long_tr = self.long_time_series_normalization(X_long_tr)
+            X_long_tt = self.long_time_series_normalization(X_long_tt)
+            file_boundaries_tr = np.zeros(y_seg_long_tr.shape)
+            file_boundaries_tt = np.zeros(y_seg_long_tt.shape)
+            if len(file_boundaries_indice_tr) > 0:
+                file_boundaries_tr[np.array(file_boundaries_indice_tr)-1]=1
+            if len(file_boundaries_indice_tt) > 0:
+                file_boundaries_tt[np.array(file_boundaries_indice_tt)-1]=1
 
-            X_long = X_long.astype(np.float32)
-            y_long = y_long.astype(np.int32)
-            y_seg_long = y_seg_long.astype(np.int32)
-            file_boundaries = np.array(file_boundaries).astype(np.int32)
+            X_long_tr = X_long_tr.astype(np.float32)
+            X_long_tt = X_long_tt.astype(np.float32)
+            y_long_tr = y_long_tr.astype(np.int32)
+            y_long_tt = y_long_tt.astype(np.int32)
+            y_seg_long_tr = y_seg_long_tr.astype(np.int32)
+            y_seg_long_tt = y_seg_long_tt.astype(np.int32)
+            file_boundaries_tr = np.array(file_boundaries_tr).astype(np.int32)
+            file_boundaries_tt = np.array(file_boundaries_tt).astype(np.int32)
 
-            np.save(os.path.join("datasets", self.data_name + "_X_long.npy"), X_long)
-            np.save(os.path.join("datasets", self.data_name + "_y_long.npy"), y_long)
-            np.save(os.path.join("datasets", self.data_name + "_y_seg_long.npy"), y_seg_long)
-            np.save(os.path.join("datasets", self.data_name + "_file_boundaries.npy"), file_boundaries)
-            print(f"{self.data_name} has been preprocessed and saved for further use")
-        print(X_long.shape, y_long.shape, y_seg_long.shape)
-        return X_long.astype(np.float32), y_long.astype(np.int32), y_seg_long.astype(np.int32), np.array(file_boundaries).astype(np.int32)
+            np.save(os.path.join("datasets", self.data_name + "_X_long_tr.npy"), X_long_tr)
+            np.save(os.path.join("datasets", self.data_name + "_y_long_tr.npy"), y_long_tr)
+            np.save(os.path.join("datasets", self.data_name + "_y_seg_long_tr.npy"), y_seg_long_tr)
+            np.save(os.path.join("datasets", self.data_name + "_file_boundaries_tr.npy"), file_boundaries_tr)
+            print(f"{self.data_name} training file has been preprocessed and saved for further use")
+
+            np.save(os.path.join("datasets", self.data_name + "_X_long_tt.npy"), X_long_tt)
+            np.save(os.path.join("datasets", self.data_name + "_y_long_tt.npy"), y_long_tt)
+            np.save(os.path.join("datasets", self.data_name + "_y_seg_long_tt.npy"), y_seg_long_tt)
+            np.save(os.path.join("datasets", self.data_name + "_file_boundaries_tt.npy"), file_boundaries_tt)
+            print(f"{self.data_name} testing file has been preprocessed and saved for further use")
+        print(X_long_tr.shape, y_long_tr.shape, y_seg_long_tr.shape)
+        print(X_long_tt.shape, y_long_tt.shape, y_seg_long_tt.shape)
+        return (X_long_tr.astype(np.float32), y_long_tr.astype(np.int32), y_seg_long_tr.astype(np.int32), np.array(file_boundaries_tr).astype(np.int32)), (X_long_tt.astype(np.float32), y_long_tt.astype(np.int32), y_seg_long_tt.astype(np.int32), np.array(file_boundaries_tt).astype(np.int32))
+        #return X_long.astype(np.float32), y_long.astype(np.int32), y_seg_long.astype(np.int32), np.array(file_boundaries).astype(np.int32)
 
 
 

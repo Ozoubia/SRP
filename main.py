@@ -109,6 +109,7 @@ for epoch in range(num_epochs):
     if validation_loss < best_val_loss:
         best_val_loss = validation_loss
         best_model_state = model.state_dict()
+        torch.save(model.state_dict(), "best_model.pt")
         counter = 0
     else:
         counter += 1

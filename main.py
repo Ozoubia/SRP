@@ -96,7 +96,10 @@ def main():
                 max_num_prop=max_num_prop_dict[NAME], tau=TAU, lr=lr_dict[MODEL][NAME], bg_class=background_class_dict[NAME],
                 al_name=AL, is_label_propagation=lp_method, no_plat_reg=NOPLATREG, temp=TEMP)
     result = tsal.doAL(num_query_ratio=num_query_ratio[NAME], eta=ETA)  #
-    os.makedir('metadata')
+    
+    if not os.path.exists('metadata'):
+        os.makedirs('metadata')
+
     if NOPLATREG==1:
         np.save(os.path.join(os.getcwd(), "metadata", f"{NAME}_{MODEL}_no{LP}_{AL}_{ETA}_{TAU}_{TEMP}_{SEED}.npy"), result)
     else:

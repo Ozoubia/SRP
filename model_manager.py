@@ -157,7 +157,7 @@ class ModelManager():
         least_train_loss = np.inf
         for i in tqdm(range(epoch), leave=True, desc="train_model"):
             train_loss_per_epoch = 0
-            for j in range(num_steps_per_epoch//10):
+            for j in range(num_steps_per_epoch):
                 indice = np.random.choice(len(prob), batch_size, p=prob)  # oversampling
                 X_windowed, y_windowed, y_seg_windowed, mask_windowed = self.dataloader.batch_generator(indice_list[indice].tolist())
                 if self.is_LLAL and i<=37:

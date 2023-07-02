@@ -19,7 +19,7 @@ background_class_dict = {"50salads":[17,18], "HAPT": [], "GTEA": [10], "mHealth"
 import argparse
 
 parser = argparse.ArgumentParser(description='parameters for TSAL')
-parser.add_argument('--dataset', type=str, default='HAPT', help='dataset name')
+parser.add_argument('--dataset', type=str, default='mHealth', help='dataset name')
 parser.add_argument('--model', type=str, default='MSTCN', help='model name')
 parser.add_argument('--gpu', type=str, default="0", help='gpu number')
 parser.add_argument('--seed', type=int, default=0, help='experiment seed')

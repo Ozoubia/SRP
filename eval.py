@@ -117,7 +117,7 @@ def get_all_metrics(y_pred,y_true,bg_class=[]):
         f1 = 2.0 * (precision*recall) / (precision+recall)
 
         f1 = np.nan_to_num(f1)*100
-        metrics.append(f1)
+        metrics.append(float(f1))
         # print('F1@%0.2f: %.4f' % (overlap[s], f1), end=" ")
     return metrics
 

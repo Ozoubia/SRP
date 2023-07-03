@@ -237,8 +237,8 @@ class TSAL:
         self.model_fitting()
         print("classifier initialized")
         self.y_pred = self.model_manager.model.predict(X_long=self.X_train, file_boundaries=self.file_boundaries_train)
-        iteration['y_pred'] = self.y_pred.tolist()
-        iteration['indices'] = self.al_indices.tolist()
+        iteration['y_pred'] = np.float32(self.y_pred).tolist()
+        iteration['indices'] = np.float32(self.al_indices).tolist()
         iteration['num_labeled'] = self.num_queried_timestamp_per_al_step
 
         if self.is_label_propagation=="platprob":
@@ -252,6 +252,8 @@ class TSAL:
         iteration['Pleatue_S'] = self.Plateau.json_pleateau_s
         iteration['Acc'] = self.model_manager.test_model(bg_class=self.bg_class)
         jsondata[f'iteration {json_i}'] = iteration
+        with open(self.al_name+'data.json', 'w') as json_file:
+            json.dump(jsondata,json_file)
         print("propagator initialized")
         for query_step in range(self.total_num_query_step):
             json_i+=1
@@ -260,8 +262,8 @@ class TSAL:
             self.acquisition()
             self.model_fitting()
             iteration['num_labeled'] = num_total_query
-            iteration['y_pred'] = self.y_pred.tolist()
-            iteration['indices'] = self.al_indices.tolist()
+            iteration['y_pred'] = np.float32(self.y_pred).tolist()
+            iteration['indices'] = np.float32(self.al_indices).tolist()
             iteration['Pleatue_C'] = self.Plateau.json_pleateau_c
             iteration['Pleatue_W'] = self.Plateau.json_pleateau_w
             iteration['Pleatue_S'] = self.Plateau.json_pleateau_s

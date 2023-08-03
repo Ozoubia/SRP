@@ -74,6 +74,7 @@ class TSAL:
             self.init_ind_selected += init_label.tolist()
         self.init_ind_selected = np.array(self.init_ind_selected)
         np.random.seed()
+        self.queried_indices = self.init_ind_selected.tolist()
         self.labeled_or_not[self.init_ind_selected] = 1
         print(f"Initial labeling done: {np.sum(self.labeled_or_not)}, num_init_label_per_class:{num_init_label_per_class}")
         self.labeled_or_not_init = np.copy(self.labeled_or_not)
@@ -97,6 +98,25 @@ class TSAL:
             return np.apply_along_axis(entropy_1d, len(X.shape) - 1, X)
         else:
             return -np.apply_along_axis(calculate_margin, len(X.shape) - 1, X)
+        
+    def custom_timestamp_uncertainty(self, X):
+        def calculate_margin(x):
+            indice = np.argsort(x)[-2:][::-1]
+            margin_ts = x[indice[0]] - x[indice[1]]
+            return margin_ts
+
+        def entropy_1d(y):
+            return -np.dot(y, np.log(y))
+        al_list = ["random","margin","entropy","conf","utility","badge", "core"]
+        al_uncertain_dict = {}
+        for strat in al_list:
+            if strat == "conf":
+                al_uncertain_dict[strat] = -np.apply_along_axis(np.max, len(X.shape) - 1, X)
+            elif strat == "entropy":
+                al_uncertain_dict[strat] = np.apply_along_axis(entropy_1d, len(X.shape) - 1, X)
+            else:
+                al_uncertain_dict[strat] = -np.apply_along_axis(calculate_margin, len(X.shape) - 1, X)
+        return al_uncertain_dict
 
     def query_scoring(self, uncertainty):
         # output: score_list, indices_list
@@ -174,6 +194,17 @@ class TSAL:
         unlabeled_ind = np.where(self.labeled_or_not == 0)[0]
         labeled_ind = np.where(self.labeled_or_not == 1)[0]
 
+        #done for getting other AL heuristics
+        uncertain_dict = self.custom_timestamp_uncertainty(self.y_pred)
+        OG_AL = self.al_name
+        scor_dict = {}
+
+        for strat,uncertains in uncertain_dict.items():
+            self.al_name = strat
+            score_list, indices_list = self.query_scoring(uncertains)
+            scor_dict[strat] = (score_list, indices_list)
+        
+        self.al_name = OG_AL #to get original strategy back
         uncertainty = self.timestamp_uncertainty(self.y_pred)
         score_list, indices_list = self.query_scoring(uncertainty)
 
@@ -182,18 +213,30 @@ class TSAL:
 
         # top-k Labeling by oracle
         selected_qwin = np.argsort(score_list)[-self.num_queried_timestamp_per_al_step:][::-1].tolist()
+
         if len(indices_list[selected_qwin]) == self.num_queried_timestamp_per_al_step:
             self.labeled_or_not[indices_list[selected_qwin]] = 1  # oracle-label is done
             self.queried_indices = indices_list[selected_qwin]
+            self.select_scores = score_list[selected_qwin].tolist() #scores of selected points by primary al strategy
         else:
             query_indices = np.random.choice(np.arange(self.num_avail),size=self.num_queried_timestamp_per_al_step).tolist()
             self.labeled_or_not[query_indices] = 1  # oracle-label is done
             self.queried_indices = query_indices
             print(indices_list[selected_qwin])
             print("less number acquired through AL")
-
         if self.is_label_propagation:
             self.label_propagation()  # propagate values
+            ## to store the scores of regions
+            reg_scores_dict = {}
+            for strat in scor_dict.keys():
+                sc, ind = scor_dict[strat]
+                regs_list = []
+                for tups in self.st_end:
+                    s,e = tups
+                    reg_sc = sc[np.where((ind >= s) & (ind<e))]
+                    regs_list.append(reg_sc.tolist())
+                reg_scores_dict[strat] = regs_list
+            self.reg_scores = reg_scores_dict
             self.labeled_or_not_propagated_before_prop = np.array([])
             prop_indices = np.where(self.labeled_or_not_propagated == 1)[0].astype(np.int64)
 
@@ -204,7 +247,6 @@ class TSAL:
             self.labeled_or_not_propagated = np.copy(self.labeled_or_not)
         self.model_manager.load_train_data(self.X_train, self.y, self.y_seg, self.labeled_or_not_propagated, self.file_boundaries_train)
         self.model_manager.train_model(self.num_epoch,self.batch_size, is_test=False)
-        self.al_indices = self.model_manager.al_indices
 
     def doAL(self, num_query_ratio=0.005, is_semi_supervised=False,  eta=0.8):
         jsondata = {}
@@ -220,7 +262,7 @@ class TSAL:
         self.eta = eta
 
         print(self.al_name, "AL with", self.is_label_propagation, "Label Propagation")
-        num_total_query = 0
+        num_total_query = 72
         test_acc = []
         num_labeled = []
         num_labeled_propagated = []
@@ -237,9 +279,8 @@ class TSAL:
         self.model_fitting()
         print("classifier initialized")
         self.y_pred = self.model_manager.model.predict(X_long=self.X_train, file_boundaries=self.file_boundaries_train)
-        iteration['y_pred'] = np.float32(self.y_pred).tolist()
-        iteration['indices'] = np.float32(self.al_indices).tolist()
-        iteration['num_labeled'] = float(self.num_queried_timestamp_per_al_step)
+        iteration['indices'] = self.queried_indices
+        iteration['num_labeled'] = num_total_query
 
         if self.is_label_propagation=="platprob":
             self.Plateau.find_and_fit(self.y_pred)
@@ -247,24 +288,36 @@ class TSAL:
             self.Plateau.update_queried_plateaus()
             self.Plateau.merge_and_split()
         self.plateau_log_per_step = []
-        iteration['Pleatue_C'] = list(map(float,self.Plateau.json_pleateau_c))
-        iteration['Pleatue_W'] = list(map(float,self.Plateau.json_pleateau_w))
-        iteration['Pleatue_S'] = list(map(float,self.Plateau.json_pleateau_s))
+        # iteration['Pleatue_C'] = list(map(float,self.Plateau.json_pleateau_c))
+        # iteration['Pleatue_W'] = list(map(float,self.Plateau.json_pleateau_w))
+        # iteration['Pleatue_S'] = list(map(float,self.Plateau.json_pleateau_s))
+        iteration['y_pred'] = self.y_pred[self.queried_indices].tolist()
         iteration['Acc'] = self.model_manager.test_model(bg_class=self.bg_class)
-        jsondata[f'iteration {json_i}'] = iteration
         print("propagator initialized")
         for query_step in range(self.total_num_query_step):
-            json_i+=1
-            iteration = {}
             num_total_query += self.num_queried_timestamp_per_al_step
             self.acquisition()
             self.model_fitting()
-            iteration['num_labeled'] = num_total_query
-            iteration['y_pred'] = np.float32(self.y_pred).tolist()
-            iteration['indices'] = np.float32(self.al_indices).tolist()
             iteration['Pleatue_C'] = list(map(float,self.Plateau.json_pleateau_c))
             iteration['Pleatue_W'] = list(map(float,self.Plateau.json_pleateau_w))
             iteration['Pleatue_S'] = list(map(float,self.Plateau.json_pleateau_s))
+            if json_i == 0:
+                jsondata[f'iteration {json_i}'] = iteration
+            json_i += 1
+            iteration = {}
+            iteration['num_labeled'] = self.num_queried_timestamp_per_al_step
+            iteration['indices'] = self.queried_indices.tolist()
+            iteration['prop_label'] = self.y_true_train[self.queried_indices].tolist()
+            iteration['y_pred'] = self.y_pred[self.queried_indices].tolist()
+            #for storing preds of region
+            reg_preds = []
+            for tups in self.st_end:
+                s,e = tups
+                reg_preds.append(self.y_pred[s:e].tolist())
+            iteration['reg_preds'] = reg_preds
+            iteration['reg_start_end'] = self.st_end
+            iteration['selected_points_scores'] = self.select_scores #store only primary score of selected point
+            iteration['regions_heuristic_scores'] = self.reg_scores #to store heuristics for region
             print(str(query_step) + "/" + str(self.total_num_query_step), end=' ')
             print(f"{np.sum(self.labeled_or_not):.0f}", end=' ')
             num_labeled.append(np.sum(self.labeled_or_not))
@@ -294,8 +347,8 @@ class TSAL:
             else:
                 print()
             self.query_step += 1
-            iteration['Acc'] = self.model_manager.test_model(bg_class=self.bg_class)
-            iteration['F-Score'] = mean_iou
+            iteration['Acc'] = self.model_manager.test_model(bg_class=self.bg_class)[0]
+            iteration['F-Score'] = float(mean_iou)
             jsondata[f'iteration {json_i}'] = iteration
 
         with open(self.al_name+'data.json', 'w') as json_file:
@@ -383,6 +436,7 @@ class TSAL:
 
         # TCLP
         elif self.is_label_propagation == "platprob":
+            self.st_end = []
             self.Plateau.add_plateaus(zip(self.queried_indices, self.y_true_train[self.queried_indices]))
             # Temperature scaling
             T = self.temp
@@ -401,6 +455,7 @@ class TSAL:
             boundary_index = []
             for pl in self.Plateau.segmenter:
                 start, end = pl.propagation_timestamp(self.eta)
+                self.st_end.append((int(start),int(end)))
                 pl_queried_ind = pl.queried_ts_list[0]
                 self.labeled_or_not_propagated[start:end] = 1
                 self.y[start:end] = y_ref[pl_queried_ind]

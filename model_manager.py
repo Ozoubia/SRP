@@ -149,7 +149,6 @@ class ModelManager():
     def train_model(self, epoch, batch_size, is_test=False):
         self.model.set_weights(self.weights_init)
         prob, indice_list = self.dataloader.window_scoring(slide_size=self.input_length)
-        self.al_indices = indice_list
         num_steps_per_epoch = len(prob) // batch_size # epoch is set by # of proped+queried labels
         train_loss = []
         test_acc=[]

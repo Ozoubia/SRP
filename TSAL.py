@@ -98,30 +98,13 @@ class TSAL:
             return np.apply_along_axis(entropy_1d, len(X.shape) - 1, X)
         else:
             return -np.apply_along_axis(calculate_margin, len(X.shape) - 1, X)
-        
-    def custom_timestamp_uncertainty(self, X):
-        def calculate_margin(x):
-            indice = np.argsort(x)[-2:][::-1]
-            margin_ts = x[indice[0]] - x[indice[1]]
-            return margin_ts
 
-        def entropy_1d(y):
-            return -np.dot(y, np.log(y))
-        al_list = ["random","margin","entropy","conf","utility","badge", "core"]
-        al_uncertain_dict = {}
-        for strat in al_list:
-            if strat == "conf":
-                al_uncertain_dict[strat] = -np.apply_along_axis(np.max, len(X.shape) - 1, X)
-            elif strat == "entropy":
-                al_uncertain_dict[strat] = np.apply_along_axis(entropy_1d, len(X.shape) - 1, X)
-            else:
-                al_uncertain_dict[strat] = -np.apply_along_axis(calculate_margin, len(X.shape) - 1, X)
-        return al_uncertain_dict
-
-    def query_scoring(self, uncertainty):
+    def query_scoring(self, uncertainty, data_collection=None):
         # output: score_list, indices_list
         labeled_or_not = np.copy(self.labeled_or_not)
         indices_list = np.where(labeled_or_not == 0)[0]
+        if data_collection:
+            indices_list = np.arange(len(self.y))
         indices_list_lb = np.where(labeled_or_not == 1)[0]
         if self.al_name == "margin" or self.al_name == "conf" or self.al_name == "entropy":
             score_list = uncertainty[indices_list]
@@ -137,6 +120,12 @@ class TSAL:
                                                       self.y_pred_class, self.file_boundaries_train)
             K = self.num_queried_timestamp_per_al_step
             ind = np.argmax([np.linalg.norm(s, 2) for s in X])
+            score_list = []
+            if data_collection:
+                K = len(self.total_queried_indices)
+                ind = self.total_queried_indices[0]
+                temp_ind = 0
+                score_list = [[0]*K for _ in range(K)]
             mu = [X[ind]]
             indsAll = [ind]
             centInds = [0.] * len(X)
@@ -153,20 +142,47 @@ class TSAL:
                 if sum(D2) == 0.0: pdb.set_trace()
                 D2 = D2.ravel().astype(float)
                 Ddist = (D2 ** 2)/ sum(D2 ** 2)
-                customDist = stats.rv_discrete(name='custm', values=(np.arange(len(D2)), Ddist))
-                ind = customDist.rvs(size=1)[0]
-                while ind in indsAll: ind = customDist.rvs(size=1)[0]
-                mu.append(X[ind])
-                indsAll.append(ind)
-                cent += 1
-                score_list = np.zeros(self.num_queried_timestamp_per_al_step)
-                indices_list = np.array(indsAll)
+
+                if data_collection: 
+                    for iind,t in enumerate(self.st_end):
+                        s,e = t
+                        rng = np.arange(s,e)
+                        if ind in rng:
+                            score_list[iind] = Ddist[s:e].tolist()
+                            break
+                    temp_ind+=1
+                    ind = self.total_queried_indices[temp_ind]
+                    mu.append(X[ind])
+                    indsAll.append(ind)
+                    continue
+
+                if data_collection is None:
+                    customDist = stats.rv_discrete(name='custm', values=(np.arange(len(D2)), Ddist))
+                    ind = customDist.rvs(size=1)[0]
+                    while ind in indsAll: ind = customDist.rvs(size=1)[0]
+                    mu.append(X[ind])
+                    indsAll.append(ind)
+                    score_list.append(Ddist)
+                    cent += 1
+            indices_list = np.array(indsAll)
+            if data_collection:
+                for iind,t in enumerate(self.st_end):
+                    s,e = t
+                    rng = np.arange(s,e)
+                    if ind in rng:
+                        score_list[iind] = Ddist[s:e].tolist()
+                        break
+            indices_list  = indices_list.tolist()
+                
 
         elif self.al_name == "core":
             embedding = self.model_manager.model.predict_penultimate(X_long=self.X_train,
                                                                      file_boundaries=self.file_boundaries_train)
             X = embedding[indices_list, :]
             X_set = embedding[indices_list_lb, :]
+            score_list = []
+            if data_collection:
+                X = embedding.copy()
             n = self.num_queried_timestamp_per_al_step
             m = np.shape(X)[0]
             if np.shape(X_set)[0] == 0:
@@ -175,38 +191,106 @@ class TSAL:
                 dist_ctr = pairwise_distances(X, X_set)
                 min_dist = np.amin(dist_ctr, axis=1)
             idxs = []
+            if data_collection:
+                n = len(self.total_queried_indices)
+                score_list = [[0]*n for _ in range(n)]
             for i in range(n):
-                idx = min_dist.argmax()
+                if data_collection is None:
+                    idx = min_dist.argmax()
+                else:
+                    idx = self.total_queried_indices[i]
                 idxs.append(idx)
                 dist_new_ctr = pairwise_distances(X, X[[idx], :])
                 for j in range(m):
                     min_dist[j] = min(min_dist[j], dist_new_ctr[j, 0])
-            indices_list = np.array(idxs)
-            score_list = np.zeros(len(idxs))
+                D2 = min_dist.ravel().astype(float)
+                Ddist = (D2 ** 2)/ sum(D2 ** 2)
+                if data_collection: 
+                    for iind,t in enumerate(self.st_end):
+                        s,e = t
+                        rng = np.arange(s,e)
+                        if idx in rng:
+                            score_list[iind] = Ddist[s:e].tolist()
+                            break
+                    
+                else:
+                    for ii in self.total_queried_indices:
+                        Ddist = np.insert(Ddist, ii, 0)
+                    score_list.append(Ddist.tolist())
+            indices_list = idxs.copy()
         else:
             raise ValueError("Not proper scoring name")
         return score_list, indices_list
+    
+    def zero_iteration(self):
+        self.y_pred = self.model_manager.model.predict(X_long=self.X_train,
+                                                       file_boundaries=self.file_boundaries_train)
+        self.y_pred_class = np.argmax(self.y_pred, axis=1)
+        unlabeled_ind = np.where(self.labeled_or_not == 0)[0]
+        labeled_ind = np.where(self.labeled_or_not == 1)[0]
+        uncertainty = self.timestamp_uncertainty(self.y_pred)
+        score_list, indices_list = self.query_scoring(uncertainty)
+        OG_AL = self.al_name
+        scor_dict={}
+        al_list = ["margin", "entropy", "conf", "badge", "core"]
+        for temp_al_strat in al_list:
+            self.al_name = temp_al_strat
+            uncertainty = self.timestamp_uncertainty(self.y_pred)
+            score_list, indices_list = self.query_scoring(uncertainty, data_collection=True)
+            scor_dict[temp_al_strat] = (score_list, indices_list)
+        
+        self.al_name = OG_AL #to get original strategy back
+        ## to store the scores of regions
+        reg_scores_dict = {}
+        for strat in scor_dict.keys():
+            if strat in ['badge','core']:
+                sc, ind = scor_dict[strat]
+                regs_list = []   
+                for tups in self.st_end:
+                    s,e = tups
+                    rng = np.arange(s,e)
+                    for en,iind in enumerate(ind):
+                        if iind in rng:
+                            regs_list.append(sc[en])
+                            break
+            else:
+                sc, ind = scor_dict[strat]
+                regs_list = []
+                for tups in self.st_end:
+                    s,e = tups
+                    reg_sc = sc[np.where((ind >= s) & (ind<e))]
+                    regs_list.append(reg_sc.tolist())
 
+            reg_scores_dict[strat] = regs_list
+        self.reg_scores = reg_scores_dict
+
+    def zero_label_prop(self):
+        self.st_end = []
+        # Temperature scaling
+        T = self.temp
+        z = self.model_manager.model.predict_logit(X_long=self.X_train, file_boundaries=self.file_boundaries_train)
+        z = z.transpose()
+        z = z / T
+        max_z = np.max(z,axis=0)
+        exp_z = np.exp(z-max_z)
+        sum_exp_z = np.sum(exp_z,axis=0)
+        y = exp_z / sum_exp_z
+        for pl in self.Plateau.segmenter:
+            start, end = pl.propagation_timestamp(self.eta)
+            self.st_end.append((int(start),int(end)))
+  
     def acquisition(self):
         self.y_pred = self.model_manager.model.predict(X_long=self.X_train,
                                                        file_boundaries=self.file_boundaries_train)
         self.y_pred_class = np.argmax(self.y_pred, axis=1)
         unlabeled_ind = np.where(self.labeled_or_not == 0)[0]
         labeled_ind = np.where(self.labeled_or_not == 1)[0]
-
-        #done for getting other AL heuristics
-        uncertain_dict = self.custom_timestamp_uncertainty(self.y_pred)
-        OG_AL = self.al_name
-        scor_dict = {}
-
-        for strat,uncertains in uncertain_dict.items():
-            self.al_name = strat
-            score_list, indices_list = self.query_scoring(uncertains)
-            scor_dict[strat] = (score_list, indices_list)
-        
-        self.al_name = OG_AL #to get original strategy back
         uncertainty = self.timestamp_uncertainty(self.y_pred)
         score_list, indices_list = self.query_scoring(uncertainty)
+        if self.al_name in ['badge','core']:
+            scor_dict = {}
+            scor_dict[self.al_name] = (score_list, indices_list)
+            score_list = np.zeros(85)
 
         if self.is_semi_supervised:
             score_list = score_list * -1  # we need to find most certain labels
@@ -217,24 +301,58 @@ class TSAL:
         if len(indices_list[selected_qwin]) == self.num_queried_timestamp_per_al_step:
             self.labeled_or_not[indices_list[selected_qwin]] = 1  # oracle-label is done
             self.queried_indices = indices_list[selected_qwin]
+            self.total_queried_indices += self.queried_indices.tolist()
+            if self.al_name in ['badge','core']:
+                score_list = np.zeros(len(self.y))
             self.select_scores = score_list[selected_qwin].tolist() #scores of selected points by primary al strategy
         else:
             query_indices = np.random.choice(np.arange(self.num_avail),size=self.num_queried_timestamp_per_al_step).tolist()
             self.labeled_or_not[query_indices] = 1  # oracle-label is done
             self.queried_indices = query_indices
+            self.total_queried_indices += self.queried_indices.tolist()
             print(indices_list[selected_qwin])
             print("less number acquired through AL")
         if self.is_label_propagation:
             self.label_propagation()  # propagate values
+            #done for getting other AL heuristics
+            OG_AL = self.al_name
+            if not OG_AL in ['badge','core']:
+                scor_dict={}
+            else:
+                sc,id = scor_dict[self.al_name]
+                sel_score = [] #list to store the selected point scores of the badge al
+                for s,i in zip(sc,id):
+                    sel_score.append(s[i])
+                self.select_scores = sel_score
+            al_list = ["margin", "entropy", "conf", "badge", "core"]
+            for temp_al_strat in al_list:
+                self.al_name = temp_al_strat
+                uncertainty = self.timestamp_uncertainty(self.y_pred)
+                if self.al_name not in ['badge', 'core'] or self.al_name != OG_AL:
+                    score_list, indices_list = self.query_scoring(uncertainty, data_collection=True)
+                    scor_dict[temp_al_strat] = (score_list, indices_list)
+            self.al_name = OG_AL #to get original strategy back
             ## to store the scores of regions
             reg_scores_dict = {}
             for strat in scor_dict.keys():
-                sc, ind = scor_dict[strat]
-                regs_list = []
-                for tups in self.st_end:
-                    s,e = tups
-                    reg_sc = sc[np.where((ind >= s) & (ind<e))]
-                    regs_list.append(reg_sc.tolist())
+                if strat in ['badge','core']:
+                    sc, ind = scor_dict[strat]
+                    regs_list = []   
+                    for tups in self.st_end:
+                        s,e = tups
+                        rng = np.arange(s,e)
+                        for en,iind in enumerate(ind):
+                            if iind in rng:
+                                regs_list.append(sc[en])
+                                break
+                else:
+                    sc, ind = scor_dict[strat]
+                    regs_list = []
+                    for tups in self.st_end:
+                        s,e = tups
+                        reg_sc = sc[np.where((ind >= s) & (ind<e))]
+                        regs_list.append(reg_sc.tolist())
+
                 reg_scores_dict[strat] = regs_list
             self.reg_scores = reg_scores_dict
             self.labeled_or_not_propagated_before_prop = np.array([])
@@ -281,6 +399,7 @@ class TSAL:
         self.y_pred = self.model_manager.model.predict(X_long=self.X_train, file_boundaries=self.file_boundaries_train)
         iteration['indices'] = self.queried_indices
         iteration['num_labeled'] = num_total_query
+        self.total_queried_indices = self.queried_indices
 
         if self.is_label_propagation=="platprob":
             self.Plateau.find_and_fit(self.y_pred)
@@ -288,11 +407,45 @@ class TSAL:
             self.Plateau.update_queried_plateaus()
             self.Plateau.merge_and_split()
         self.plateau_log_per_step = []
-        # iteration['Pleatue_C'] = list(map(float,self.Plateau.json_pleateau_c))
-        # iteration['Pleatue_W'] = list(map(float,self.Plateau.json_pleateau_w))
-        # iteration['Pleatue_S'] = list(map(float,self.Plateau.json_pleateau_s))
+
+        #to get F1-Score for iteration 0
+        prop_indices = np.where(self.labeled_or_not_propagated == 1)[0].astype(np.int64)
+        prop_acc_one = np.sum(self.y[prop_indices] == self.y_true_train[prop_indices]) / np.sum(
+            self.labeled_or_not_propagated)
+        y_prop = np.zeros_like(self.y)
+        y_prop[:]=-1
+        y_prop[prop_indices] = self.y[prop_indices]
+        _,_,_,mean_iou = f_score(y_prop,self.y_true_train,[.5], self.bg_class)
         iteration['y_pred'] = self.y_pred[self.queried_indices].tolist()
-        iteration['Acc'] = self.model_manager.test_model(bg_class=self.bg_class)
+        iteration['Acc'] = self.model_manager.test_model(bg_class=self.bg_class)[0]
+        iteration['F-Score'] = float(mean_iou)
+        self.zero_label_prop()
+        self.zero_iteration()
+        #for storing preds of region
+        reg_preds = []
+        for tups in self.st_end:
+            s,e = tups
+            reg_preds.append(self.y_pred[s:e].tolist())
+
+        iteration['reg_preds'] = reg_preds
+        iteration['reg_start_end'] = self.st_end
+        iteration['regions_heuristic_scores'] = self.reg_scores #to store heuristics for region
+        iteration['prop_label'] = self.y_true_train[self.queried_indices].tolist()
+        self.select_scores = []
+        if not self.al_name in ['random','utility']:
+            for pt in self.queried_indices:
+                for ee,tups in enumerate(self.st_end):
+                    s,e = tups
+                    rng = range(s,e)
+                    if pt in rng:
+                        dummy = np.zeros(len(self.y))
+                        dummy[s:e] = self.reg_scores[self.al_name][ee]
+                        self.select_scores.append(dummy[pt])
+                        break
+        else:
+            self.select_scores = [None]*len(self.queried_indices)
+
+        iteration['selected_points_scores'] = self.select_scores #store only primary score of selected point
         print("propagator initialized")
         for query_step in range(self.total_num_query_step):
             num_total_query += self.num_queried_timestamp_per_al_step
@@ -316,6 +469,8 @@ class TSAL:
                 reg_preds.append(self.y_pred[s:e].tolist())
             iteration['reg_preds'] = reg_preds
             iteration['reg_start_end'] = self.st_end
+            if self.al_name in ['random','utility']:
+                self.select_scores = [None]*len(self.queried_indices)
             iteration['selected_points_scores'] = self.select_scores #store only primary score of selected point
             iteration['regions_heuristic_scores'] = self.reg_scores #to store heuristics for region
             print(str(query_step) + "/" + str(self.total_num_query_step), end=' ')
@@ -351,6 +506,10 @@ class TSAL:
             iteration['F-Score'] = float(mean_iou)
             jsondata[f'iteration {json_i}'] = iteration
 
+        iteration['Pleatue_C'] = list(map(float,self.Plateau.json_pleateau_c))
+        iteration['Pleatue_W'] = list(map(float,self.Plateau.json_pleateau_w))
+        iteration['Pleatue_S'] = list(map(float,self.Plateau.json_pleateau_s))
+        jsondata[f'iteration {json_i}'] = iteration
         with open(self.al_name+'data.json', 'w') as json_file:
             json.dump(jsondata,json_file)
 

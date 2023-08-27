@@ -290,6 +290,7 @@ class TSAL:
         if self.al_name in ['badge','core']:
             scor_dict = {}
             scor_dict[self.al_name] = (score_list, indices_list)
+            indices_list = np.array(indices_list)
             score_list = np.zeros(85)
 
         if self.is_semi_supervised:

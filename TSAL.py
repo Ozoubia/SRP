@@ -126,6 +126,8 @@ class TSAL:
                 ind = self.total_queried_indices[0]
                 temp_ind = 0
                 score_list = [[0]*K for _ in range(K)]
+            else:
+                K+=1
             mu = [X[ind]]
             indsAll = [ind]
             centInds = [0.] * len(X)
@@ -162,7 +164,7 @@ class TSAL:
                     while ind in indsAll: ind = customDist.rvs(size=1)[0]
                     mu.append(X[ind])
                     indsAll.append(ind)
-                    score_list.append(Ddist)
+                    score_list.append(Ddist.tolist())
                     cent += 1
             indices_list = np.array(indsAll)
             if data_collection:
@@ -172,6 +174,8 @@ class TSAL:
                     if ind in rng:
                         score_list[iind] = Ddist[s:e].tolist()
                         break
+            else:
+                indices_list = indices_list[:-1]
             indices_list  = indices_list.tolist()
                 
 
@@ -214,9 +218,13 @@ class TSAL:
                             break
                     
                 else:
-                    for ii in self.total_queried_indices:
-                        Ddist = np.insert(Ddist, ii, 0)
-                    score_list.append(Ddist.tolist())
+                    utc = 0 #temp counter
+                    newD = np.arange(len(self.y))
+                    for i in newD:
+                        if i not in self.total_queried_indices:
+                            newD[i] = Ddist[utc]
+                            utc+=1
+                    score_list.append(newD.tolist())
             indices_list = idxs.copy()
         else:
             raise ValueError("Not proper scoring name")

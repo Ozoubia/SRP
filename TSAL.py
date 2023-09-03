@@ -422,7 +422,7 @@ class TSAL:
         self.y_seg = np.copy(self.y_seg_true_train)
 
         # Initialize Segmenter with Plateaus
-        #self.model_fitting()
+        self.model_fitting()
         print("classifier initialized")
         self.y_pred = self.model_manager.model.predict(X_long=self.X_train, file_boundaries=self.file_boundaries_train)
         iteration['indices'] = self.queried_indices
@@ -460,20 +460,20 @@ class TSAL:
         iteration['regions_heuristic_scores'] = self.reg_scores #to store heuristics for region
         iteration['prop_label'] = self.y_true_train[self.queried_indices].tolist()
         self.select_scores = []
-        # if not self.al_name in ['random','utility']:
-        #     for pt in self.queried_indices:
-        #         for ee,tups in enumerate(self.st_end):
-        #             s,e = tups
-        #             rng = range(s,e)
-        #             if pt in rng:
-        #                 dummy = np.zeros(len(self.y))
-        #                 dummy[s:e] = self.reg_scores[self.al_name][ee]
-        #                 self.select_scores.append(dummy[pt])
-        #                 break
-        # else:
-        #     self.select_scores = [None]*len(self.queried_indices)
+        if not self.al_name in ['random','utility']:
+            for pt in self.queried_indices:
+                for ee,tups in enumerate(self.st_end):
+                    s,e = tups
+                    rng = range(s,e)
+                    if pt in rng:
+                        dummy = np.zeros(len(self.y))
+                        dummy[s:e] = self.reg_scores[self.al_name][ee]
+                        self.select_scores.append(dummy[pt])
+                        break
+        else:
+            self.select_scores = [None]*len(self.queried_indices)
 
-        # iteration['selected_points_scores'] = self.select_scores #store only primary score of selected point
+        iteration['selected_points_scores'] = self.select_scores #store only primary score of selected point
         print("propagator initialized")
         for query_step in range(self.total_num_query_step):
             num_total_query += self.num_queried_timestamp_per_al_step

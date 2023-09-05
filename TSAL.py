@@ -99,7 +99,7 @@ class TSAL:
         else:
             return -np.apply_along_axis(calculate_margin, len(X.shape) - 1, X)
 
-    def query_scoring(self, uncertainty, data_collection=None):
+    def query_scoring(self, uncertainty, data_collection=None, secondary_data=None):
         # output: score_list, indices_list
         labeled_or_not = np.copy(self.labeled_or_not)
         indices_list = np.where(labeled_or_not == 0)[0]
@@ -121,6 +121,7 @@ class TSAL:
             K = self.num_queried_timestamp_per_al_step
             ind = np.argmax([np.linalg.norm(s, 2) for s in X])
             score_list = []
+
             if data_collection:
                 try:
                     filtered_indices = []
@@ -139,6 +140,14 @@ class TSAL:
                 ind = filtered_indices[0]
                 temp_ind = 0
                 score_list = [[0]*K for _ in range(K)]
+            
+            elif secondary_data:
+                filtered_indices = secondary_data
+                K = len(filtered_indices)
+                ind = filtered_indices[0]
+                temp_ind = 0
+                score_list = []
+
             else:
                 K+=1
             mu = [X[ind]]
@@ -171,7 +180,18 @@ class TSAL:
                     indsAll.append(ind)
                     continue
 
-                if data_collection is None:
+                elif secondary_data:
+                    for reg in self.st_end:
+                        s,e = reg
+                        rng = range(s,e)
+                        if ind in rng:
+                            score_list.append(Ddist[s:e].tolist())
+                    temp_ind+=1
+                    ind = filtered_indices[temp_ind]
+                    mu.append(X[ind])
+                    indsAll.append(ind)
+
+                else:
                     customDist = stats.rv_discrete(name='custm', values=(np.arange(len(D2)), Ddist))
                     ind = customDist.rvs(size=1)[0]
                     while ind in indsAll: ind = customDist.rvs(size=1)[0]
@@ -179,6 +199,7 @@ class TSAL:
                     indsAll.append(ind)
                     score_list.append(Ddist.tolist())
                     cent += 1
+
             indices_list = np.array(indsAll)
             if data_collection:
                 for iind,t in enumerate(self.st_end):
@@ -189,6 +210,13 @@ class TSAL:
                         break
                 if not (len(score_list) == len(self.st_end)):
                     score_list = score_list[:len(self.st_end)]
+
+            elif secondary_data:
+                for reg in self.st_end:
+                    s,e = reg
+                    rng = range(s,e)
+                    if ind in rng:
+                        score_list.append(Ddist[s:e].tolist())
             else:
                 indices_list = indices_list[:-1]
             indices_list  = indices_list.tolist()
@@ -200,7 +228,7 @@ class TSAL:
             X = embedding[indices_list, :]
             X_set = embedding[indices_list_lb, :]
             score_list = []
-            if data_collection:
+            if data_collection or secondary_data:
                 X = embedding.copy()
             n = self.num_queried_timestamp_per_al_step
             m = np.shape(X)[0]
@@ -226,8 +254,14 @@ class TSAL:
                     filtered_indices = self.total_queried_indices.copy()
                 
                 score_list = [[0]*n for _ in range(n)]
+            
+            elif secondary_data:
+                filtered_indices = secondary_data
+                n = len(filtered_indices)
+                score_list = []
+
             for i in range(n):
-                if data_collection is None:
+                if (data_collection is None) and (secondary_data is None):
                     idx = min_dist.argmax()
                 else:
                     idx = filtered_indices[i]
@@ -248,10 +282,18 @@ class TSAL:
                     if not (len(score_list) == len(self.st_end)):
                         score_list = score_list[:len(self.st_end)]
                     
+                elif secondary_data:
+                    for reg in self.st_end:
+                        s,e = reg
+                        rng = range(s,e)
+                        if idx in rng:
+                            score_list.append(Ddist[s:e].tolist())
+                            break
+                
                 else:
                     utc = 0 #temp counter
-                    newD = np.arange(len(self.y))
-                    for i in newD:
+                    newD = np.zeros(len(self.y),dtype=np.float32)
+                    for i in range(len(newD)):
                         if i not in self.total_queried_indices:
                             newD[i] = Ddist[utc]
                             utc+=1
@@ -272,7 +314,7 @@ class TSAL:
         OG_AL = self.al_name
         scor_dict={}
         al_list = ["margin", "entropy", "conf", "badge", "core"]
-        #al_list = ["core"]
+        #al_list = ["badge"]
         for temp_al_strat in al_list:
             self.al_name = temp_al_strat
             uncertainty = self.timestamp_uncertainty(self.y_pred)
@@ -355,11 +397,11 @@ class TSAL:
             else:
                 sc,id = scor_dict[self.al_name]
                 sel_score = [] #list to store the selected point scores of the badge al
-                for s,i in zip(sc,id):
+                for s,i in zip(sc,sorted(id)):
                     sel_score.append(s[i])
                 self.select_scores = sel_score
             al_list = ["margin", "entropy", "conf", "badge", "core"]
-            #al_list = ["core"]
+            #al_list = ["badge"]
             for temp_al_strat in al_list:
                 self.al_name = temp_al_strat
                 uncertainty = self.timestamp_uncertainty(self.y_pred)
@@ -371,8 +413,41 @@ class TSAL:
             reg_scores_dict = {}
             for strat in scor_dict.keys():
                 if strat in ['badge','core']:
-                    sc, ind = scor_dict[strat]
-                    regs_list = sc
+                    if self.al_name == strat:
+                        shrink_lst = []
+                        sc,ind = scor_dict[strat]
+                        for t in self.total_queried_indices:
+                            if t not in ind:
+                                shrink_lst.append(t)
+
+                        sec_scores,sec_ind = self.query_scoring(5, data_collection=None, secondary_data=shrink_lst)
+                        regs_dict = {}
+                        taken_list = []
+
+                        for regs in self.st_end:
+                            s,e = regs
+                            rng = range(s,e)
+                            for sind in range(len(ind)):
+                                if (ind[sind] in rng) and (ind[sind] not in regs_dict.keys()):
+                                    regs_dict[ind[sind]] = sc[sind][s:e]
+                                    taken_list.append(rng)
+                                    break
+                                    
+                        for regs in self.st_end:
+                            s,e = regs
+                            rng = range(s,e)
+                            if not rng in taken_list:
+                                for sind in range(len(sec_ind)):
+                                    if sec_ind[sind] in rng:
+                                        regs_dict[sec_ind[sind]] = sec_scores[sind]
+                                        break
+                                        
+                        myKeys = list(regs_dict.keys())
+                        myKeys.sort()
+                        regs_list = [regs_dict[i] for i in myKeys]
+                    else:
+                        sc, ind = scor_dict[strat]
+                        regs_list = sc
                 else:
                     sc, ind = scor_dict[strat]
                     regs_list = []

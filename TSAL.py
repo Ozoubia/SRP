@@ -139,7 +139,7 @@ class TSAL:
                 
                 ind = filtered_indices[0]
                 temp_ind = 0
-                score_list = [[0]*K for _ in range(K)]
+                score_list = [[0]*1350 for _ in range(1350)]
             
             elif secondary_data:
                 filtered_indices = secondary_data
@@ -253,7 +253,7 @@ class TSAL:
                     n = len(self.total_queried_indices)
                     filtered_indices = self.total_queried_indices.copy()
                 
-                score_list = [[0]*n for _ in range(n)]
+                score_list = [[0]*1350 for _ in range(1350)]
             
             elif secondary_data:
                 filtered_indices = secondary_data

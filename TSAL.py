@@ -313,8 +313,8 @@ class TSAL:
         score_list, indices_list = self.query_scoring(uncertainty)
         OG_AL = self.al_name
         scor_dict={}
-        al_list = ["margin", "entropy", "conf", "badge", "core"]
-        #al_list = ["badge"]
+        #al_list = ["margin", "entropy", "conf", "badge", "core"]
+        al_list = ["badge"]
         for temp_al_strat in al_list:
             self.al_name = temp_al_strat
             uncertainty = self.timestamp_uncertainty(self.y_pred)
@@ -396,12 +396,16 @@ class TSAL:
                 scor_dict={}
             else:
                 sc,id = scor_dict[self.al_name]
+                temp_sel_score = {}
+                for kid in range(len(id)):
+                    temp_sel_score[id[kid]] = sc[kid]
+                temp_sel_score = dict(sorted(temp_sel_score.items()))
                 sel_score = [] #list to store the selected point scores of the badge al
-                for s,i in zip(sc,sorted(id)):
+                for i,s in temp_sel_score.items():
                     sel_score.append(s[i])
                 self.select_scores = sel_score
-            al_list = ["margin", "entropy", "conf", "badge", "core"]
-            #al_list = ["badge"]
+            #al_list = ["margin", "entropy", "conf", "badge", "core"]
+            al_list = ["badge"]
             for temp_al_strat in al_list:
                 self.al_name = temp_al_strat
                 uncertainty = self.timestamp_uncertainty(self.y_pred)
@@ -414,34 +418,15 @@ class TSAL:
             for strat in scor_dict.keys():
                 if strat in ['badge','core']:
                     if self.al_name == strat:
-                        shrink_lst = []
-                        sc,ind = scor_dict[strat]
-                        for t in self.total_queried_indices:
-                            if t not in ind:
-                                shrink_lst.append(t)
-
-                        sec_scores,sec_ind = self.query_scoring(5, data_collection=None, secondary_data=shrink_lst)
+                        sc, ind = scor_dict[strat]
                         regs_dict = {}
-                        taken_list = []
-
                         for regs in self.st_end:
                             s,e = regs
                             rng = range(s,e)
                             for sind in range(len(ind)):
-                                if (ind[sind] in rng) and (ind[sind] not in regs_dict.keys()):
+                                if (ind[sind] in rng):
                                     regs_dict[ind[sind]] = sc[sind][s:e]
-                                    taken_list.append(rng)
                                     break
-                                    
-                        for regs in self.st_end:
-                            s,e = regs
-                            rng = range(s,e)
-                            if not rng in taken_list:
-                                for sind in range(len(sec_ind)):
-                                    if sec_ind[sind] in rng:
-                                        regs_dict[sec_ind[sind]] = sec_scores[sind]
-                                        break
-                                        
                         myKeys = list(regs_dict.keys())
                         myKeys.sort()
                         regs_list = [regs_dict[i] for i in myKeys]

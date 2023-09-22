@@ -313,8 +313,8 @@ class TSAL:
         score_list, indices_list = self.query_scoring(uncertainty)
         OG_AL = self.al_name
         scor_dict={}
-        #al_list = ["margin", "entropy", "conf", "badge", "core"]
-        al_list = ["badge"]
+        al_list = ["margin", "entropy", "conf", "badge", "core"]
+        #al_list = ["badge"]
         for temp_al_strat in al_list:
             self.al_name = temp_al_strat
             uncertainty = self.timestamp_uncertainty(self.y_pred)
@@ -404,8 +404,8 @@ class TSAL:
                 for i,s in temp_sel_score.items():
                     sel_score.append(s[i])
                 self.select_scores = sel_score
-            #al_list = ["margin", "entropy", "conf", "badge", "core"]
-            al_list = ["badge"]
+            al_list = ["margin", "entropy", "conf", "badge", "core"]
+            #al_list = ["badge"]
             for temp_al_strat in al_list:
                 self.al_name = temp_al_strat
                 uncertainty = self.timestamp_uncertainty(self.y_pred)

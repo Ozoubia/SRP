@@ -314,7 +314,7 @@ class TSAL:
         OG_AL = self.al_name
         scor_dict={}
         al_list = ["margin", "entropy", "conf", "badge", "core"]
-        #al_list = ["badge"]
+        # al_list = ["badge"]
         for temp_al_strat in al_list:
             self.al_name = temp_al_strat
             uncertainty = self.timestamp_uncertainty(self.y_pred)
@@ -405,7 +405,7 @@ class TSAL:
                     sel_score.append(s[i])
                 self.select_scores = sel_score
             al_list = ["margin", "entropy", "conf", "badge", "core"]
-            #al_list = ["badge"]
+            # al_list = ["badge"]
             for temp_al_strat in al_list:
                 self.al_name = temp_al_strat
                 uncertainty = self.timestamp_uncertainty(self.y_pred)
@@ -420,13 +420,29 @@ class TSAL:
                     if self.al_name == strat:
                         sc, ind = scor_dict[strat]
                         regs_dict = {}
+                        already_computed_regions = [] #to check which region heuristics we have already calculated
                         for regs in self.st_end:
                             s,e = regs
                             rng = range(s,e)
                             for sind in range(len(ind)):
                                 if (ind[sind] in rng):
                                     regs_dict[ind[sind]] = sc[sind][s:e]
+                                    already_computed_regions.append(regs)
                                     break
+                        
+                        regs_left = set(self.st_end).difference(set(already_computed_regions))
+                        
+                        if not len(regs_left) == 0:
+                            remaining_pts = []
+                            for r in regs_left:
+                                if r not in already_computed_regions:
+                                    s,e = r
+                                    remaining_pts.append((e+s)//2)
+                            score_list, indices_list = self.query_scoring(5, data_collection=None, secondary_data=remaining_pts)
+
+                            for i,id in enumerate(indices_list):
+                                regs_dict[id] = score_list[i]
+                                
                         myKeys = list(regs_dict.keys())
                         myKeys.sort()
                         regs_list = [regs_dict[i] for i in myKeys]

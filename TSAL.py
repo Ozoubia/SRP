@@ -314,7 +314,7 @@ class TSAL:
         OG_AL = self.al_name
         scor_dict={}
         al_list = ["margin", "entropy", "conf", "badge", "core"]
-        # al_list = ["badge"]
+        # al_list = ["core"]
         for temp_al_strat in al_list:
             self.al_name = temp_al_strat
             uncertainty = self.timestamp_uncertainty(self.y_pred)
@@ -405,7 +405,7 @@ class TSAL:
                     sel_score.append(s[i])
                 self.select_scores = sel_score
             al_list = ["margin", "entropy", "conf", "badge", "core"]
-            # al_list = ["badge"]
+            # al_list = ["core"]
             for temp_al_strat in al_list:
                 self.al_name = temp_al_strat
                 uncertainty = self.timestamp_uncertainty(self.y_pred)
@@ -430,19 +430,40 @@ class TSAL:
                                     already_computed_regions.append(regs)
                                     break
                         
-                        regs_left = set(self.st_end).difference(set(already_computed_regions))
+                        regs_left = list(set(self.st_end).difference(set(already_computed_regions)))
                         
                         if not len(regs_left) == 0:
                             remaining_pts = []
                             for r in regs_left:
-                                if r not in already_computed_regions:
                                     s,e = r
                                     remaining_pts.append((e+s)//2)
                             score_list, indices_list = self.query_scoring(5, data_collection=None, secondary_data=remaining_pts)
 
                             for i,id in enumerate(indices_list):
                                 regs_dict[id] = score_list[i]
-                                
+
+                        if not len(self.st_end) == len(regs_dict.keys()):
+                            already_computed_regions = []
+                            for reg in self.st_end:
+                                s,e = reg
+                                for pt in regs_dict.keys():
+                                    if pt in range(s,e):
+                                        already_computed_regions.append(reg)
+
+                            regs_left = list(set(self.st_end).difference(set(already_computed_regions)))
+                            remaining_pts = []
+                            for r in regs_left:
+                                s,e = r
+                                remaining_pts.append((e+s)//2)
+                            score_list, indices_list = self.query_scoring(5, data_collection=None, secondary_data=remaining_pts)
+
+                            for i,id in enumerate(indices_list):
+                                regs_dict[id] = score_list[i]
+
+                        if not len(self.st_end) == len(regs_dict.keys()):
+                            print("##############Problem Stop Training###############")
+                            print(len(self.st_end), len(regs_dict.keys()))
+ 
                         myKeys = list(regs_dict.keys())
                         myKeys.sort()
                         regs_list = [regs_dict[i] for i in myKeys]

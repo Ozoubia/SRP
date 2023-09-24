@@ -143,8 +143,9 @@ class TSAL:
             
             elif secondary_data:
                 filtered_indices = secondary_data
-                K = len(filtered_indices)
-                ind = filtered_indices[0]
+                keys = list(filtered_indices.keys())
+                K = len(keys)
+                ind = keys[0]
                 temp_ind = 0
                 score_list = []
 
@@ -181,13 +182,11 @@ class TSAL:
                     continue
 
                 elif secondary_data:
-                    for reg in self.st_end:
-                        s,e = reg
-                        rng = range(s,e)
-                        if ind in rng:
-                            score_list.append(Ddist[s:e].tolist())
+                    rreg=filtered_indices[ind]
+                    s,e=rreg
+                    score_list.append(Ddist[s:e].tolist())
                     temp_ind+=1
-                    ind = filtered_indices[temp_ind]
+                    ind = keys[temp_ind]
                     mu.append(X[ind])
                     indsAll.append(ind)
 
@@ -212,11 +211,9 @@ class TSAL:
                     score_list = score_list[:len(self.st_end)]
 
             elif secondary_data:
-                for reg in self.st_end:
-                    s,e = reg
-                    rng = range(s,e)
-                    if ind in rng:
-                        score_list.append(Ddist[s:e].tolist())
+                rreg=filtered_indices[ind]
+                s,e=rreg
+                score_list.append(Ddist[s:e].tolist())
             else:
                 indices_list = indices_list[:-1]
             indices_list  = indices_list.tolist()
@@ -314,7 +311,7 @@ class TSAL:
         OG_AL = self.al_name
         scor_dict={}
         al_list = ["margin", "entropy", "conf", "badge", "core"]
-        # al_list = ["core"]
+        # al_list = ["badge"]
         for temp_al_strat in al_list:
             self.al_name = temp_al_strat
             uncertainty = self.timestamp_uncertainty(self.y_pred)
@@ -405,7 +402,7 @@ class TSAL:
                     sel_score.append(s[i])
                 self.select_scores = sel_score
             al_list = ["margin", "entropy", "conf", "badge", "core"]
-            # al_list = ["core"]
+            # al_list = ["badge"]
             for temp_al_strat in al_list:
                 self.al_name = temp_al_strat
                 uncertainty = self.timestamp_uncertainty(self.y_pred)
@@ -433,29 +430,14 @@ class TSAL:
                         regs_left = list(set(self.st_end).difference(set(already_computed_regions)))
                         
                         if not len(regs_left) == 0:
-                            remaining_pts = []
+                            remaining_pts_dict = {}
                             for r in regs_left:
                                     s,e = r
-                                    remaining_pts.append((e+s)//2)
-                            score_list, indices_list = self.query_scoring(5, data_collection=None, secondary_data=remaining_pts)
-
-                            for i,id in enumerate(indices_list):
-                                regs_dict[id] = score_list[i]
-
-                        if not len(self.st_end) == len(regs_dict.keys()):
-                            already_computed_regions = []
-                            for reg in self.st_end:
-                                s,e = reg
-                                for pt in regs_dict.keys():
-                                    if pt in range(s,e):
-                                        already_computed_regions.append(reg)
-
-                            regs_left = list(set(self.st_end).difference(set(already_computed_regions)))
-                            remaining_pts = []
-                            for r in regs_left:
-                                s,e = r
-                                remaining_pts.append((e+s)//2)
-                            score_list, indices_list = self.query_scoring(5, data_collection=None, secondary_data=remaining_pts)
+                                    remaining_pts_dict[(e+s)//2] = r
+                            
+                            score_list, indices_list = self.query_scoring(5, data_collection=None, secondary_data=remaining_pts_dict)
+                            if not len(score_list) == len(indices_list):
+                                print("Size don't match")
 
                             for i,id in enumerate(indices_list):
                                 regs_dict[id] = score_list[i]

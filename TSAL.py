@@ -436,6 +436,8 @@ class TSAL:
                                     remaining_pts_dict[(e+s)//2] = r
                             
                             score_list, indices_list = self.query_scoring(5, data_collection=None, secondary_data=remaining_pts_dict)
+                            print("Size of indices returned", len(indices_list))
+                            print("Size of the remaining pts",len(remaining_pts_dict))
                             if not len(score_list) == len(indices_list):
                                 print("Size don't match")
 

@@ -1,5 +1,4 @@
 import os
-
 from preprocessing import Preprocessing
 from plateau import Plateaus
 from model_manager import ModelManager
@@ -13,6 +12,10 @@ import json
 from scipy import stats, signal
 import matplotlib.pyplot as plt
 from eval import f_score
+import pandas as pd
+from sklearn.model_selection import train_test_split
+import xgboost as xgb
+from sklearn.metrics import mean_squared_error
 
 class TSAL:
     def __init__(self, data_name, model_name, input_length, init_ratio, total_num_query_step, num_epoch, batch_size,
@@ -466,6 +469,168 @@ class TSAL:
             self.reg_scores = reg_scores_dict
             self.labeled_or_not_propagated_before_prop = np.array([])
             prop_indices = np.where(self.labeled_or_not_propagated == 1)[0].astype(np.int64)
+            # First, pre-processing of json files and creating X and y (From Sameer's Script)
+
+            X,y = self.json_prep()
+
+            # XGBoost model fitting with X and y
+            self.xgboost_model(X, y)
+
+            # Calling self-engineered label propagation function where class variables are replaced with copies
+
+    def json_prep(self):
+        # Create a list to store the data
+        data = {"json_file": [],
+                "iteration": [],
+                "num_labeled": [],
+                "y_pred": [],
+                "reg_preds": [],
+                "reg_start_end": [],
+                "selected_points_score": [],
+                "margin_heuristic_score": [],
+                "entropy_heuristic_score": [],
+                "conf_heuristic_score": [],
+                "badge_heuristic_score": [],
+                "core_heuristic_score": [],
+                "Plateau_W": [],
+                "Plateau_S": [],
+                "Acc": [],
+                "F-Score": [],
+                "indices": [], }
+
+        json_files = ["confdata.json", "entropydata.json", "randomdata.json"]
+        for json_file in json_files:
+            with open("jsondata/" + json_file, "r") as f:
+                json_data = json.load(f)
+                for iteration, values in json_data.items():
+                    data["json_file"].append(os.path.basename(json_file))
+                    data["iteration"].append(iteration)
+                    data["num_labeled"].append(values["num_labeled"])
+                    data["y_pred"].append(values["y_pred"])
+                    data["reg_preds"].append(values["reg_preds"])
+                    data["reg_start_end"].append(values["reg_start_end"])
+                    data["selected_points_score"].append(values["selected_points_scores"])
+                    data["margin_heuristic_score"].append(values["regions_heuristic_scores"]["margin"])
+                    data["entropy_heuristic_score"].append(values["regions_heuristic_scores"]["entropy"])
+                    data["conf_heuristic_score"].append(values["regions_heuristic_scores"]["conf"])
+                    data["badge_heuristic_score"].append(values["regions_heuristic_scores"]["badge"])
+                    data["core_heuristic_score"].append(values["regions_heuristic_scores"]["core"])
+                    data["Plateau_W"].append(values["Pleatue_W"])
+                    data["Plateau_S"].append(values["Pleatue_S"])
+                    data["Acc"].append(values["Acc"])
+                    data["F-Score"].append(values["F-Score"])
+                    data["indices"].append(values["indices"])
+
+        # Create a dataframe from the loaded data
+        combined_df = pd.DataFrame(data)
+
+        # to correct the inidices at iteration 0
+        zero_lst = set(combined_df['indices'][0])
+        i = []
+        for indd in combined_df['indices'][1:]:
+            for a in indd:
+                i.append(a)
+        zero_it_list = list(zero_lst.difference(set(i)))
+
+        combined_df.at[0, 'indices'] = zero_it_list
+        data = {}
+        tot_data = []
+
+        ## Main code
+        # for only overlapped region
+        tot_data = []
+        row_ind = 0
+        for ii, val in combined_df.iterrows():
+            if ii == 15:
+                break
+            indices = val['indices']
+            st_end = val['reg_start_end']
+            for i, se in enumerate(st_end):
+                s, e = se
+                for pt_i, pts in enumerate(indices):
+                    data = {}
+                    if pts in range(s, e):
+                        data['pt'] = pts
+                        data['st_end'] = se
+                        data['margin_heuristic_score'] = val['margin_heuristic_score'][i]
+                        data['entropy_heuristic_score'] = val['entropy_heuristic_score'][i]
+                        data['conf_heuristic_score'] = val['conf_heuristic_score'][i]
+                        data['badge_heuristic_score'] = val['badge_heuristic_score'][i]
+                        data['core_heuristic_score'] = val['core_heuristic_score'][i]
+                        data['reg_preds'] = val['reg_preds'][i]
+                        data['y_pred'] = val['y_pred'][pt_i]
+                        data['Plateau_W'] = val['Plateau_W'][i]
+                        data['Plateau_S'] = val['Plateau_S'][i]
+                        tot_data.append(data)
+        processed_data = pd.DataFrame(tot_data)
+        X = np.zeros((len(processed_data), 65))
+        y = np.zeros((len(processed_data), 1))
+        for i, r in processed_data.iterrows():
+            X[i, 0] = r['pt']
+
+            # margin
+            bins = [-np.inf, -9.00001238e-01, -8.00002476e-01, -7.00003713e-01, -6.00004951e-01, -5.00006189e-01,
+                    -4.00007427e-01, -3.00008665e-01, -2.00009902e-01, -1.00011140e-01, np.inf]
+            X[i, 1:11] = np.histogram(r['margin_heuristic_score'], bins)[0]
+
+            # entropy
+            bins = [-np.inf, 2.47268904e-01, 4.94537515e-01, 7.41806127e-01,
+                    9.89074739e-01, 1.23634335e+00, 1.48361196e+00, 1.73088057e+00,
+                    1.97814919e+00, 2.22541780e+00, np.inf]
+            X[i, 11:21] = np.histogram(r['entropy_heuristic_score'], bins)[0]
+
+            # conf
+            bins = [-np.inf, -0.91035276, -0.82070553, -0.73105829, -0.64141106,
+                    -0.55176382, -0.46211659, -0.37246935, -0.28282211, -0.19317488, np.inf]
+            X[i, 21:31] = np.histogram(r['conf_heuristic_score'], bins)[0]
+
+            # badge
+            bins = [0.00000000e+00, 5.74823908e-11, 1.14964782e-10, 1.72447173e-10,
+                    2.29929563e-10, 2.87411954e-10, 3.44894345e-10, 6.89788690e-07,
+                    1.10366190e-05, 1.24161964e-05, np.inf]
+            X[i, 31:41] = np.histogram(r['badge_heuristic_score'], bins)[0]
+
+            # core
+            bins = [-np.inf, 1.43876252e-07, 2.87752503e-07, 4.31628755e-07, 7.19381258e-07, 1.43876252e-06,
+                    2.15814377e-06, 2.87752503e-06, 3.59690629e-06, 4.31628755e-06, np.inf]
+            X[i, 41:51] = np.histogram(r['core_heuristic_score'], bins)[0]
+
+            # reg preds
+            bins = [-np.inf, 2.47268632e-01, 4.94537264e-01, 7.41805896e-01, 9.89074528e-01, 1.23634316e+00,
+                    1.48361179e+00, 1.73088042e+00, 1.97814906e+00, 2.22541769e+00, np.inf]
+            X[i, 51:61] = np.histogram([-np.dot(y, np.log(np.array(y) + 1e-12)) for y in r['reg_preds']], bins)[0]
+
+            # y preds
+            X[i, 61] = -np.dot(r['y_pred'], np.log(np.array(r['y_pred']) + 1e-12))
+
+            # pleatue_w
+            X[i, 62] = r['Plateau_W']
+
+            # pleatue_s
+            X[i, 63] = r['Plateau_S']
+
+            # reg_start_end
+            st, ed = r['st_end']
+            y[i, 0] = ed - st
+
+        return X, y
+
+    def xgboost_model(self, X, y):
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        # Initialize the XGBoost Regressor
+        xgb_model = xgb.XGBRegressor(objective="reg:squarederror", random_state=42)
+
+        # Fit the model to the training data
+        xgb_model.fit(X_train, y_train)
+
+        # Make predictions on the test data
+        y_pred = xgb_model.predict(X_test)
+
+        # Evaluate the model's performance (for regression, you can use Mean Squared Error)
+        mse = mean_squared_error(y_test, y_pred)
+        print(f"Mean Squared Error: {mse}")
+
 
     def model_fitting(self):
         if not self.is_label_propagation:  # if label propagation is not allowed, use original data

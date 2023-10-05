@@ -814,7 +814,7 @@ class TSAL:
 
         boundary_index = []
         for index, region_width in zip(indx_list, reg_wdth):
-            if len(self.x) % 2 == 0:
+            if len(self.X) % 2 == 0:
                 start = int(index) - int(len(region_width)/2)
                 end = int(index) + int(len(region_width)/2)
             else:

@@ -478,10 +478,10 @@ class TSAL:
 
             # Calling self-engineered label propagation function see lines 797-825
             self.label_propagation_XGBoost(prop_indices, xg_reg)
-            # print(f'xgboost output: {xg_reg}')
-            # print(f'length of xgboost output {len(xg_reg)}')
-            # print(f'prop indices: {prop_indices}')
-            # print(f'length of prop indices {len(prop_indices)}')
+            print(f'xgboost output: {xg_reg}')
+            print(f'length of xgboost output {len(xg_reg)}')
+            print(f'prop indices: {prop_indices}')
+            print(f'length of prop indices {len(prop_indices)}')
 
     def json_prep(self):
         # Create a list to store the data

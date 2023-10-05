@@ -474,10 +474,10 @@ class TSAL:
             X,y = self.json_prep()
 
             # XGBoost model fitting with X and y
-            self.xgboost_model(X, y)
+            xg_reg = self.xgboost_model(X, y)
 
             # Calling self-engineered label propagation function see lines 797-825
-            self.label_propagation_XGBoost()
+            self.label_propagation_XGBoost(prop_indices, xg_reg)
 
     def json_prep(self):
         # Create a list to store the data
@@ -632,6 +632,7 @@ class TSAL:
         mse = mean_squared_error(y_test, y_pred)
         print(f"Mean Squared Error: {mse}")
 
+        return y_pred
 
     def model_fitting(self):
         if not self.is_label_propagation:  # if label propagation is not allowed, use original data
@@ -794,7 +795,7 @@ class TSAL:
             return [num_labeled, num_labeled_propagated, test_acc, prop_accuracy, prop_mean_iou, boundary_accuracy]
 
     #Label propagation module based on XGBoost Model
-    def label_propagation_XGBoost(self):
+    def label_propagation_XGBoost(self, indx_list, reg_wdth):
         """
         The input to this function will be particular list of indicies of the points that the active learning has selected.
         Another input to this function will be the width that the XGBoost model has predicted for all of these different regions.

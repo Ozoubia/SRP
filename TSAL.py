@@ -478,6 +478,10 @@ class TSAL:
 
             # Calling self-engineered label propagation function see lines 797-825
             self.label_propagation_XGBoost(prop_indices, xg_reg)
+            # print(f'xgboost output: {xg_reg}')
+            # print(f'length of xgboost output {len(xg_reg)}')
+            # print(f'prop indices: {prop_indices}')
+            # print(f'length of prop indices {len(prop_indices)}')
 
     def json_prep(self):
         # Create a list to store the data
@@ -815,11 +819,11 @@ class TSAL:
         boundary_index = []
         for index, region_width in zip(indx_list, reg_wdth):
             if len(self.X) % 2 == 0:
-                start = int(index) - int(len(region_width)/2)
-                end = int(index) + int(len(region_width)/2)
+                start = int(index) - int(region_width/2)
+                end = int(index) + int(region_width/2)
             else:
-                start = int(index) - int(len(region_width)/2)
-                end = int(index) + int(len(region_width)/2) + 1
+                start = int(index) - int(region_width/2)
+                end = int(index) + int(region_width/2) + 1
             self.y[start:end] = y_ref[index]
             self.labeled_or_not_propagated[start:end] = 1
             boundary_index += [start, end]

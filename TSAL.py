@@ -114,7 +114,7 @@ class TSAL:
         elif self.al_name == "random":
             score_list = np.random.rand(len(indices_list))
         elif self.al_name == "utility":
-            labeled_or_not_proped = np.copy(self.labeled_or_not_propagated)
+            labeled_or_not_proped = np.copy(self.labeled_or_not_propagated_before_prop)
             indices_list = np.where(labeled_or_not_proped == 0)[0]
             score_list = np.random.rand(len(indices_list))
 
@@ -476,7 +476,8 @@ class TSAL:
             # XGBoost model fitting with X and y
             self.xgboost_model(X, y)
 
-            # Calling self-engineered label propagation function where class variables are replaced with copies
+            # Calling self-engineered label propagation function see lines 797-825
+            self.label_propagation_XGBoost()
 
     def json_prep(self):
         # Create a list to store the data
@@ -646,7 +647,7 @@ class TSAL:
         json_i = 0
         self.labeled_or_not = np.copy(self.labeled_or_not_init)
         self.query_step = 0
-        self.labeled_or_not_propagated_before_prop = np.array([])
+        self.labeled_or_not_propagated_before_prop = np.copy(self.labeled_or_not_init) #self made change
         self.num_queried_timestamp_per_al_step = int(num_query_ratio * self.total_length)
 
         self.is_semi_supervised = is_semi_supervised
@@ -792,6 +793,41 @@ class TSAL:
         else:
             return [num_labeled, num_labeled_propagated, test_acc, prop_accuracy, prop_mean_iou, boundary_accuracy]
 
+    #Label propagation module based on XGBoost Model
+    def label_propagation_XGBoost(self):
+        """
+        The input to this function will be particular list of indicies of the points that the active learning has selected.
+        Another input to this function will be the width that the XGBoost model has predicted for all of these different regions.
+        So let's say if active learning selects 85 points so indices list will have a length of 85 and so does the width list.
+        Here for the sake of demonstration, I have created a dummy variables indx_list and reg_wdth that replicates the functionality
+        of the indicies list and reg width list. You can code in whatever logic you want, you can store the indices list and region width 
+        predicted by the XGBoost model in a class variable. This way the input to this function would remain self. In short, feel free to follow
+        whatever you think works best. 
+        """
+        y_ref = np.copy(self.y_true_train)
+        self.labeled_or_not_propagated = np.copy(self.labeled_or_not)
+        self.y = np.copy(self.y_true_train)
+        self.y_seg = np.copy(self.y_seg_true)
+        boundary_index = np.where(self.y_seg_true_train > self.boundary_threshold)[0]  # true boundary indices
+        self.segmenter_acc = np.sum(self.y_seg_true[boundary_index.tolist()] == 1) / len(boundary_index)
+
+        boundary_index = []
+        for index, region_width in zip(indx_list, reg_wdth):
+            if len(self.x) % 2 == 0:
+                start = int(index) - int(len(region_width)/2)
+                end = int(index) + int(len(region_width)/2)
+            else:
+                start = int(index) - int(len(region_width)/2)
+                end = int(index) + int(len(region_width)/2) + 1
+            self.y[start:end] = y_ref[index]
+            self.labeled_or_not_propagated[start:end] = 1
+            boundary_index += [start, end]
+        self.segmenter_acc = np.sum(self.y_seg_true[boundary_index] == 1) / len(boundary_index)
+
+        ##Note: Don't forget to replace the indx_list and reg_width with the original variables (whatever you will create)
+
+    
+    #OG Function
     def label_propagation(self):
         y_ref = np.copy(self.y_true_train)
         y_seg_ref = np.copy(self.y_seg_true)

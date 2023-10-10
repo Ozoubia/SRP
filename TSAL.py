@@ -784,14 +784,90 @@ class TSAL:
             self.labeled_or_not_propagated = np.copy(self.labeled_or_not)
         self.model_manager.load_train_data(self.X_train, self.y, self.y_seg, self.labeled_or_not_propagated, self.file_boundaries_train)
         self.model_manager.train_model(self.num_epoch,self.batch_size, is_test=False)
+    
+    def preprocess_data(self, val):
+        tot_data = []
+        row_ind = 0
+        indices = val['indices']
+        st_end = val['reg_start_end']
+        for i,se in enumerate(st_end):
+            s,e = se
+            for pt_i,pts in enumerate(indices):
+                data = {}
+                if pts in range(s,e):
+                    data['pt'] = pts
+                    data['st_end'] = se
+                    data['margin_heuristic_score'] = val['regions_heuristic_scores']['margin'][i]
+                    data['entropy_heuristic_score'] = val['regions_heuristic_scores']['entropy'][i]
+                    data['conf_heuristic_score'] = val['regions_heuristic_scores']['conf'][i]
+                    data['badge_heuristic_score'] = val['regions_heuristic_scores']['badge'][i]
+                    data['core_heuristic_score'] = val['regions_heuristic_scores']['core'][i]
+                    data['reg_preds'] = val['reg_preds'][i]
+                    data['y_pred'] = val['y_pred'][pt_i]
+                    data['Plateau_W'] = val['Pleatue_W'][i]
+                    data['Plateau_S'] = val['Pleatue_S'][i]
+                    tot_data.append(data)  
+        return pd.DataFrame(tot_data)  
 
+    def make_histogram(self, processed_data):
+        X = np.zeros((len(processed_data),65))
+        y = np.zeros((len(processed_data),1))
+        for i,r in processed_data.iterrows():
+            X[i,0] = r['pt']
+            
+            #margin
+            bins =  [-np.inf, -9.00001238e-01, -8.00002476e-01, -7.00003713e-01, -6.00004951e-01, -5.00006189e-01, -4.00007427e-01, -3.00008665e-01, -2.00009902e-01, -1.00011140e-01, np.inf]
+            X[i,1:11] = np.histogram(r['margin_heuristic_score'], bins)[0]
+            
+            #entropy
+            bins =  [-np.inf, 2.47268904e-01, 4.94537515e-01, 7.41806127e-01,
+                9.89074739e-01, 1.23634335e+00, 1.48361196e+00, 1.73088057e+00,
+                1.97814919e+00, 2.22541780e+00, np.inf]
+            X[i,11:21] = np.histogram(r['entropy_heuristic_score'], bins)[0]
+            
+            #conf
+            bins =   [-np.inf, -0.91035276, -0.82070553, -0.73105829, -0.64141106,
+                -0.55176382, -0.46211659, -0.37246935, -0.28282211, -0.19317488, np.inf]
+            X[i,21:31] = np.histogram(r['conf_heuristic_score'], bins)[0]
+            
+            #badge
+            bins = [0.00000000e+00, 5.74823908e-11, 1.14964782e-10, 1.72447173e-10,
+            2.29929563e-10, 2.87411954e-10, 3.44894345e-10, 6.89788690e-07,
+            1.10366190e-05, 1.24161964e-05, np.inf]
+            X[i,31:41] = np.histogram(r['badge_heuristic_score'], bins)[0]
+            
+            #core
+            bins = [-np.inf,  1.43876252e-07, 2.87752503e-07, 4.31628755e-07,  7.19381258e-07, 1.43876252e-06, 2.15814377e-06, 2.87752503e-06, 3.59690629e-06, 4.31628755e-06, np.inf]
+            X[i,41:51] = np.histogram(r['core_heuristic_score'], bins)[0]
+            
+            #reg preds
+            bins = [-np.inf,  2.47268632e-01,  4.94537264e-01,  7.41805896e-01, 9.89074528e-01,  1.23634316e+00,  1.48361179e+00,  1.73088042e+00, 1.97814906e+00,  2.22541769e+00,  np.inf]
+            X[i,51:61] =np.histogram([-np.dot(y, np.log(np.array(y)+ 1e-12)) for y in r['reg_preds']],bins)[0]
+            
+            #y preds
+            X[i,61] = -np.dot(r['y_pred'], np.log(np.array(r['y_pred'])+ 1e-12))
+            
+            #pleatue_w
+            X[i,62] = r['Plateau_W']
+            
+            #pleatue_s
+            X[i,63] = r['Plateau_S']
+            
+            #reg_start_end
+            st,ed = r['st_end']
+            y[i,0] = ed-st
+            return X,y
+
+    
     def doAL(self, num_query_ratio=0.005, is_semi_supervised=False,  eta=0.8):
+        with open('xgb_models/model.pkl', 'rb') as file:
+            xgb_model = pickle.load(file)
         jsondata = {}
         iteration = {}
         json_i = 0
         self.labeled_or_not = np.copy(self.labeled_or_not_init)
         self.query_step = 0
-        self.labeled_or_not_propagated_before_prop = np.copy(self.labeled_or_not_init) #self made change
+        self.labeled_or_not_propagated_before_prop = np.array([])
         self.num_queried_timestamp_per_al_step = int(num_query_ratio * self.total_length)
 
         self.is_semi_supervised = is_semi_supervised
@@ -873,18 +949,12 @@ class TSAL:
             iteration['Pleatue_C'] = list(map(float,self.Plateau.json_pleateau_c))
             iteration['Pleatue_W'] = list(map(float,self.Plateau.json_pleateau_w))
             iteration['Pleatue_S'] = list(map(float,self.Plateau.json_pleateau_s))
+            processed_data = self.preprocess_data(iteration)
+            data_X, data_y = self.make_histogram(processed_data)
+            xgb_reg_width = xgb_model.predict(data_X)
+            self.label_propagation_XGBoost(data_X[:,0].tolist(), xgb_reg_width.tolist())
             if json_i == 0:
                 jsondata[f'iteration {json_i}'] = iteration
-
-                # print(iteration.keys())
-                # json prep
-                # x, y = self.json_prep_ext(iteration)
-                # print(f'x: {x}')
-                # print(f'length of x {len(x)}')
-                # print(f'y: {y}')
-                # print(f'length of : {len(y)}')
-
-                # xgboost model train
             json_i += 1
             iteration = {}
             iteration['num_labeled'] = self.num_queried_timestamp_per_al_step
@@ -935,28 +1005,12 @@ class TSAL:
             iteration['F-Score'] = float(mean_iou)
             jsondata[f'iteration {json_i}'] = iteration
 
-
-            # prepare the json data
-            X, y = self.json_prep_ext(iteration)
-            # print(f' json data : \n {iteration}')
-            # XGboost model here, after json data is captured
-
-            print(f'X : \n {X}')
-            print(f'y : \n {y}')
-
-            # load model
-            # xgb_model_loaded = pickle.load(open('xgb_models/model.pkl', "rb"))
-            # xgb_model_loaded.predict(X)
-
-
         iteration['Pleatue_C'] = list(map(float,self.Plateau.json_pleateau_c))
         iteration['Pleatue_W'] = list(map(float,self.Plateau.json_pleateau_w))
         iteration['Pleatue_S'] = list(map(float,self.Plateau.json_pleateau_s))
         jsondata[f'iteration {json_i}'] = iteration
         with open(self.al_name+'data.json', 'w') as json_file:
             json.dump(jsondata,json_file)
-
-
 
         if len(plateau_log) > 0:
             return [num_labeled, num_labeled_propagated, test_acc, prop_accuracy, prop_mean_iou, boundary_accuracy, plateau_log]
@@ -983,6 +1037,7 @@ class TSAL:
 
         boundary_index = []
         for index, region_width in zip(indx_list, reg_wdth):
+            region_width = np.ceil(region_width)
             if len(self.X) % 2 == 0:
                 start = int(index) - int(region_width/2)
                 end = int(index) + int(region_width/2)

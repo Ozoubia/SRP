@@ -856,7 +856,7 @@ class TSAL:
             #reg_start_end
             st,ed = r['st_end']
             y[i,0] = ed-st
-            return X,y
+        return X,y
 
     
     def doAL(self, num_query_ratio=0.005, is_semi_supervised=False,  eta=0.8):
@@ -1044,7 +1044,7 @@ class TSAL:
             else:
                 start = int(index) - int(region_width/2)
                 end = int(index) + int(region_width/2) + 1
-            self.y[start:end] = y_ref[index]
+            self.y[start:end] = y_ref[int(index)]
             self.labeled_or_not_propagated[start:end] = 1
             boundary_index += [start, end]
         self.segmenter_acc = np.sum(self.y_seg_true[boundary_index] == 1) / len(boundary_index)

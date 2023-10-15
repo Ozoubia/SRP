@@ -396,7 +396,7 @@ class TSAL:
                 temp_sel_score = {}
                 for kid in range(len(id)):
                     temp_sel_score[id[kid]] = sc[kid]
-                temp_sel_score = dict(sorted(temp_sel_score.items()))
+                temp_sel_score = dict(temp_sel_score.items())
                 sel_score = [] #list to store the selected point scores of the badge al
                 for i,s in temp_sel_score.items():
                     sel_score.append(s[i])
@@ -525,7 +525,7 @@ class TSAL:
         y_prop[:]=-1
         y_prop[prop_indices] = self.y[prop_indices]
         _,_,_,mean_iou = f_score(y_prop,self.y_true_train,[.5], self.bg_class)
-        iteration['y_pred'] = self.y_pred[self.queried_indices].tolist()
+        iteration['y_pred'] = self.y_pred[self.total_queried_indices].tolist()
         iteration['Acc'] = self.model_manager.test_model(bg_class=self.bg_class)[0]
         iteration['F-Score'] = float(mean_iou)
         self.zero_label_prop()
@@ -570,7 +570,7 @@ class TSAL:
             iteration['num_labeled'] = self.num_queried_timestamp_per_al_step
             iteration['indices'] = self.queried_indices.tolist()
             iteration['prop_label'] = self.y_true_train[self.queried_indices].tolist()
-            iteration['y_pred'] = self.y_pred[self.queried_indices].tolist()
+            iteration['y_pred'] = self.y_pred[self.total_queried_indices].tolist()
             #for storing preds of region
             reg_preds = []
             for tups in self.st_end:
@@ -615,6 +615,7 @@ class TSAL:
             iteration['F-Score'] = float(mean_iou)
             jsondata[f'iteration {json_i}'] = iteration
 
+        self.acquisition()
         iteration['Pleatue_C'] = list(map(float,self.Plateau.json_pleateau_c))
         iteration['Pleatue_W'] = list(map(float,self.Plateau.json_pleateau_w))
         iteration['Pleatue_S'] = list(map(float,self.Plateau.json_pleateau_s))

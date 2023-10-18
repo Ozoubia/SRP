@@ -400,7 +400,7 @@ class TSAL:
                 temp_sel_score = {}
                 for kid in range(len(id)):
                     temp_sel_score[id[kid]] = sc[kid]
-                temp_sel_score = dict(sorted(temp_sel_score.items()))
+                temp_sel_score = dict(temp_sel_score.items())
                 sel_score = [] #list to store the selected point scores of the badge al
                 for i,s in temp_sel_score.items():
                     sel_score.append(s[i])
@@ -945,7 +945,6 @@ class TSAL:
         for query_step in range(self.total_num_query_step):
             num_total_query += self.num_queried_timestamp_per_al_step
             self.acquisition()
-            self.model_fitting()
             iteration['Pleatue_C'] = list(map(float,self.Plateau.json_pleateau_c))
             iteration['Pleatue_W'] = list(map(float,self.Plateau.json_pleateau_w))
             iteration['Pleatue_S'] = list(map(float,self.Plateau.json_pleateau_s))
@@ -953,8 +952,11 @@ class TSAL:
             data_X, data_y = self.make_histogram(processed_data)
             xgb_reg_width = xgb_model.predict(data_X)
             self.label_propagation_XGBoost(data_X[:,0].tolist(), xgb_reg_width.tolist())
+            self.model_fitting()
+            
             if json_i == 0:
                 jsondata[f'iteration {json_i}'] = iteration
+            
             json_i += 1
             iteration = {}
             iteration['num_labeled'] = self.num_queried_timestamp_per_al_step

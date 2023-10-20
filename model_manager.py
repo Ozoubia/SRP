@@ -20,7 +20,6 @@ class ModelManager():
         self.K = K
         self.model_init = 0
         self.is_LLAL = is_LLAL
-        tf.random.set_seed(self.seed)
 
         if self.model_name == "TCN":
             self.model = model.TCN(self.num_class, self.dim, lr)

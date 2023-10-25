@@ -89,6 +89,29 @@ class ModelManager():
             prev_i = i
         return ECE
 
+    def test_train_model(self, bg_class = []):
+        file_boundary_ind = np.where(self.file_boundaries_train==1)[0].tolist()
+        start = 0  # train_data_start_ind
+        if len(file_boundary_ind) > 0:
+            if not len(self.file_boundaries_train)-1 in file_boundary_ind:
+                file_boundary_ind.append(len(self.file_boundaries_train)-1)
+            for i in file_boundary_ind:
+                output_final_file = self.model(self.X_long_train[np.newaxis, start:i+1]).numpy()[0]
+                if start == 0:
+                    output_final = output_final_file
+                else:
+                    output_final = np.concatenate([output_final, output_final_file], axis=0)
+                start = i+1
+        else:
+            output_final = self.model(self.X_long_train[np.newaxis, :, :]).numpy()
+        output_final = output_final.reshape((-1, self.num_class))
+        y_train_flatten = tf.reshape(self.y_long_train, [-1]).numpy()
+        if len(output_final)!=len(y_train_flatten):
+            print(self.y_long_train.shape, self.X_long_train.shape, len(self.file_boundaries_train), file_boundary_ind, len(output_final), len(y_train_flatten))
+            print("shapes are different when training")
+
+        return get_all_metrics(np.argmax(output_final,axis=1),y_train_flatten,bg_class=bg_class)
+    
     def test_model(self, bg_class = []):
         file_boundary_ind = np.where(self.file_boundaries_test==1)[0].tolist()
         start = 0  # test_data_start_ind

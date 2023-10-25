@@ -953,6 +953,7 @@ class TSAL:
             xgb_reg_width = xgb_model.predict(data_X)
             self.label_propagation_XGBoost(data_X[:,0].tolist(), xgb_reg_width.tolist())
             self.model_fitting()
+            train_acc = self.model_manager.test_train_model(bg_class=self.bg_class)[0]
             
             if json_i == 0:
                 jsondata[f'iteration {json_i}'] = iteration
@@ -980,6 +981,7 @@ class TSAL:
             print(f"{np.sum(self.labeled_or_not_propagated):.0f}", end=' ')
             num_labeled_propagated.append(np.sum(self.labeled_or_not_propagated))
             print(f"{np.sum(self.labeled_or_not_propagated) / np.sum(self.labeled_or_not):.1f}", end=' ')
+            print(f'Train Acc: {train_acc}',end=' ')
             test_acc.append(self.model_manager.test_model(bg_class=self.bg_class))
             for i in test_acc[-1]:
                 print(f"{i:.3f}", end=" ")

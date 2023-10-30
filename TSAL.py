@@ -862,6 +862,8 @@ class TSAL:
     def doAL(self, num_query_ratio=0.005, is_semi_supervised=False,  eta=0.8):
         with open('xgb_models/model.pkl', 'rb') as file:
             xgb_model = pickle.load(file)
+        if not os.path.exists('Logged'):
+            os.makedirs('Logged')
         jsondata = {}
         iteration = {}
         json_i = 0
@@ -957,6 +959,9 @@ class TSAL:
             
             if json_i == 0:
                 jsondata[f'iteration {json_i}'] = iteration
+
+            # After creating the DataFrame (assuming it's named 'df')
+            processed_data.to_csv(f'Logged/iteration_{json_i}.csv', index=False)
             
             json_i += 1
             iteration = {}

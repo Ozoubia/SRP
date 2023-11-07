@@ -99,7 +99,7 @@ class TSAL:
         else:
             return -np.apply_along_axis(calculate_margin, len(X.shape) - 1, X)
 
-    def query_scoring(self, uncertainty, data_collection=None, secondary_data=None):
+    def query_scoring(self, uncertainty, data_collection=None):
         # output: score_list, indices_list
         labeled_or_not = np.copy(self.labeled_or_not)
         indices_list = np.where(labeled_or_not == 0)[0]
@@ -123,34 +123,16 @@ class TSAL:
             score_list = []
 
             if data_collection:
-                try:
-                    filtered_indices = []
-                    for endex in self.total_queried_indices:
-                        for t in self.st_end:
-                            s,e = t
-                            rng = range(s,e)
-                            if endex in rng:
-                                filtered_indices.append(endex)
-                                break
-                        K = len(filtered_indices)
-                except:
-                    K = len(self.total_queried_indices)
-                    filtered_indices = self.total_queried_indices.copy()
+                K = len(self.queried_indices)
+                filtered_indices = self.queried_indices.copy()
                 
                 ind = filtered_indices[0]
-                temp_ind = 0
-                score_list = [[0]*1350 for _ in range(1350)]
-            
-            elif secondary_data:
-                filtered_indices = secondary_data
-                keys = list(filtered_indices.keys())
-                K = len(keys)
-                ind = keys[0]
                 temp_ind = 0
                 score_list = []
 
             else:
                 K+=1
+
             mu = [X[ind]]
             indsAll = [ind]
             centInds = [0.] * len(X)
@@ -169,26 +151,12 @@ class TSAL:
                 Ddist = (D2 ** 2)/ sum(D2 ** 2)
 
                 if data_collection: 
-                    for iind,t in enumerate(self.st_end):
-                        s,e = t
-                        rng = np.arange(s,e)
-                        if ind in rng:
-                            score_list[iind] = Ddist[s:e].tolist()
-                            break
+                    score_list.append(Ddist.tolist())
                     temp_ind+=1
                     ind = filtered_indices[temp_ind]
                     mu.append(X[ind])
                     indsAll.append(ind)
                     continue
-
-                elif secondary_data:
-                    rreg=filtered_indices[ind]
-                    s,e=rreg
-                    score_list.append(Ddist[s:e].tolist())
-                    temp_ind+=1
-                    ind = keys[temp_ind]
-                    mu.append(X[ind])
-                    indsAll.append(ind)
 
                 else:
                     customDist = stats.rv_discrete(name='custm', values=(np.arange(len(D2)), Ddist))
@@ -200,20 +168,10 @@ class TSAL:
                     cent += 1
 
             indices_list = np.array(indsAll)
+            
             if data_collection:
-                for iind,t in enumerate(self.st_end):
-                    s,e = t
-                    rng = np.arange(s,e)
-                    if ind in rng:
-                        score_list[iind] = Ddist[s:e].tolist()
-                        break
-                if not (len(score_list) == len(self.st_end)):
-                    score_list = score_list[:len(self.st_end)]
+                score_list.append(Ddist.tolist())
 
-            elif secondary_data:
-                rreg=filtered_indices[ind]
-                s,e=rreg
-                score_list.append(Ddist[s:e].tolist())
             else:
                 indices_list = indices_list[:-1]
             indices_list  = indices_list.tolist()
@@ -225,7 +183,7 @@ class TSAL:
             X = embedding[indices_list, :]
             X_set = embedding[indices_list_lb, :]
             score_list = []
-            if data_collection or secondary_data:
+            if data_collection:
                 X = embedding.copy()
             n = self.num_queried_timestamp_per_al_step
             m = np.shape(X)[0]
@@ -236,29 +194,12 @@ class TSAL:
                 min_dist = np.amin(dist_ctr, axis=1)
             idxs = []
             if data_collection:
-                try:
-                    filtered_indices = []
-                    for endex in self.total_queried_indices:
-                        for t in self.st_end:
-                            s,e = t
-                            rng = range(s,e)
-                            if endex in rng:
-                                filtered_indices.append(endex)
-                                break
-                    n = len(filtered_indices)
-                except:
-                    n = len(self.total_queried_indices)
-                    filtered_indices = self.total_queried_indices.copy()
-                
-                score_list = [[0]*1350 for _ in range(1350)]
-            
-            elif secondary_data:
-                filtered_indices = secondary_data
-                n = len(filtered_indices)
+                n = len(self.queried_indices)
+                filtered_indices = self.queried_indices.copy()
                 score_list = []
 
             for i in range(n):
-                if (data_collection is None) and (secondary_data is None):
+                if data_collection is None:
                     idx = min_dist.argmax()
                 else:
                     idx = filtered_indices[i]
@@ -268,24 +209,9 @@ class TSAL:
                     min_dist[j] = min(min_dist[j], dist_new_ctr[j, 0])
                 D2 = min_dist.ravel().astype(float)
                 Ddist = (D2 ** 2)/ sum(D2 ** 2)
+                
                 if data_collection: 
-                    for iind,t in enumerate(self.st_end):
-                        s,e = t
-                        rng = np.arange(s,e)
-                        if idx in rng:
-                            score_list[iind] = Ddist[s:e].tolist()
-                            break
-                    
-                    if not (len(score_list) == len(self.st_end)):
-                        score_list = score_list[:len(self.st_end)]
-                    
-                elif secondary_data:
-                    for reg in self.st_end:
-                        s,e = reg
-                        rng = range(s,e)
-                        if idx in rng:
-                            score_list.append(Ddist[s:e].tolist())
-                            break
+                    score_list.append(Ddist.tolist())
                 
                 else:
                     utc = 0 #temp counter
@@ -299,6 +225,32 @@ class TSAL:
         else:
             raise ValueError("Not proper scoring name")
         return score_list, indices_list
+    
+    def get_regions(self,indices):
+        label_bound = np.arange(len(self.y_seg))[self.y_seg == 1]
+        label_bound_means = [int((label_bound[i] + label_bound[i + 1]) / 2) for i in range(len(label_bound) - 1)]
+        reg_start_end_list = []
+        for ind in indices:
+            idx = np.argmax(label_bound>ind)
+            reg_end = label_bound[idx]
+            reg_start = label_bound[idx - 1]
+            min_dist = min(reg_end-ind,ind-reg_start)
+            if (ind < label_bound[0]):
+                min_dist = min(label_bound[0]-ind,ind-0)
+                start = ind-min_dist 
+                end = ind+min_dist+1
+            elif (ind > label_bound[-1]):
+                min_dist = min(ind-label_bound[-1],label_bound[-1]-ind)
+                start = ind-min_dist 
+                end = ind+min_dist+1
+            if ind in label_bound_means:
+                start = ind-min_dist 
+                end = ind+min_dist
+            else:
+                start = ind-min_dist 
+                end = ind+min_dist+1
+            reg_start_end_list.append((start,end))
+        return reg_start_end_list
     
     def zero_iteration(self):
         self.y_pred = self.model_manager.model.predict(X_long=self.X_train,
@@ -318,17 +270,39 @@ class TSAL:
             score_list, indices_list = self.query_scoring(uncertainty, data_collection=True)
             scor_dict[temp_al_strat] = (score_list, indices_list)
         
+        #to get the score of selected indices
+        if  OG_AL in ['badge','core']:
+            sc,id = scor_dict[self.al_name]
+            sel_score = []
+            for ks,kid in zip(sc,id):
+                sel_score.append(ks[kid])
+            self.select_scores = sel_score
+        elif OG_AL in ['random','utility']:
+            self.select_scores = [None]*len(self.queried_indices)
+        else:
+            sc,id = scor_dict[self.al_name]
+            sel_score = []
+            for ks,kid in zip(sc,id):
+                sel_score.append(ks[kid])
+            self.select_scores = sel_score
+
         self.al_name = OG_AL #to get original strategy back
+        reg_st_ed_lst = self.get_regions(self.queried_indices)
         ## to store the scores of regions
         reg_scores_dict = {}
         for strat in scor_dict.keys():
             if strat in ['badge','core']:
                 sc, ind = scor_dict[strat]
-                regs_list = sc
+                regs_list = []
+                ind = np.arange(len(self.y))
+                for tups,scor in zip(reg_st_ed_lst,sc):
+                    s,e = tups
+                    reg_sc = np.array(scor)[np.where((ind >= s) & (ind<e))[0]]
+                    regs_list.append(reg_sc.tolist())
             else:
                 sc, ind = scor_dict[strat]
                 regs_list = []
-                for tups in self.st_end:
+                for tups in reg_st_ed_lst:
                     s,e = tups
                     reg_sc = sc[np.where((ind >= s) & (ind<e))]
                     regs_list.append(reg_sc.tolist())
@@ -389,75 +363,48 @@ class TSAL:
             self.label_propagation()  # propagate values
             #done for getting other AL heuristics
             OG_AL = self.al_name
-            if not OG_AL in ['badge','core']:
-                scor_dict={}
-            else:
-                sc,id = scor_dict[self.al_name]
-                temp_sel_score = {}
-                for kid in range(len(id)):
-                    temp_sel_score[id[kid]] = sc[kid]
-                temp_sel_score = dict(temp_sel_score.items())
-                sel_score = [] #list to store the selected point scores of the badge al
-                for i,s in temp_sel_score.items():
-                    sel_score.append(s[i])
-                self.select_scores = sel_score
+            scor_dict = {}
+            
             al_list = ["margin", "entropy", "conf", "badge", "core"]
             # al_list = ["badge"]
             for temp_al_strat in al_list:
                 self.al_name = temp_al_strat
                 uncertainty = self.timestamp_uncertainty(self.y_pred)
-                if self.al_name not in ['badge', 'core'] or self.al_name != OG_AL:
-                    score_list, indices_list = self.query_scoring(uncertainty, data_collection=True)
-                    scor_dict[temp_al_strat] = (score_list, indices_list)
+                score_list, indices_list = self.query_scoring(uncertainty, data_collection=True)
+                scor_dict[temp_al_strat] = (score_list, indices_list)
+
+            if  OG_AL in ['badge','core']:
+                sc,id = scor_dict[self.al_name]
+                sel_score = []
+                for ks,kid in zip(sc,id):
+                    sel_score.append(ks[kid])
+                self.select_scores = sel_score
+            elif OG_AL in ['random','utility']:
+                self.select_scores = [None]*len(self.queried_indices)
+            else:
+                sc,id = scor_dict[self.al_name]
+                sel_score = []
+                for ks,kid in zip(sc,id):
+                    sel_score.append(ks[kid])
+                self.select_scores = sel_score
+
             self.al_name = OG_AL #to get original strategy back
+            reg_st_ed_lst = self.get_regions(self.queried_indices)
             ## to store the scores of regions
             reg_scores_dict = {}
             for strat in scor_dict.keys():
                 if strat in ['badge','core']:
-                    if self.al_name == strat:
-                        sc, ind = scor_dict[strat]
-                        regs_dict = {}
-                        already_computed_regions = [] #to check which region heuristics we have already calculated
-                        for regs in self.st_end:
-                            s,e = regs
-                            rng = range(s,e)
-                            for sind in range(len(ind)):
-                                if (ind[sind] in rng):
-                                    regs_dict[ind[sind]] = sc[sind][s:e]
-                                    already_computed_regions.append(regs)
-                                    break
-                        
-                        regs_left = list(set(self.st_end).difference(set(already_computed_regions)))
-                        
-                        if not len(regs_left) == 0:
-                            remaining_pts_dict = {}
-                            for r in regs_left:
-                                    s,e = r
-                                    remaining_pts_dict[(e+s)//2] = r
-                            
-                            score_list, indices_list = self.query_scoring(5, data_collection=None, secondary_data=remaining_pts_dict)
-                            print("Size of indices returned", len(indices_list))
-                            print("Size of the remaining pts",len(remaining_pts_dict))
-                            if not len(score_list) == len(indices_list):
-                                print("Size don't match")
-
-                            for i,id in enumerate(indices_list):
-                                regs_dict[id] = score_list[i]
-
-                        if not len(self.st_end) == len(regs_dict.keys()):
-                            print("##############Problem Stop Training###############")
-                            print(len(self.st_end), len(regs_dict.keys()))
- 
-                        myKeys = list(regs_dict.keys())
-                        myKeys.sort()
-                        regs_list = [regs_dict[i] for i in myKeys]
-                    else:
-                        sc, ind = scor_dict[strat]
-                        regs_list = sc
+                    sc, ind = scor_dict[strat]
+                    regs_list = []
+                    ind = np.arange(len(self.y))
+                    for tups,scor in zip(reg_st_ed_lst,sc):
+                        s,e = tups
+                        reg_sc = np.array(scor)[np.where((ind >= s) & (ind<e))[0]]
+                        regs_list.append(reg_sc.tolist())
                 else:
                     sc, ind = scor_dict[strat]
                     regs_list = []
-                    for tups in self.st_end:
+                    for tups in reg_st_ed_lst:
                         s,e = tups
                         reg_sc = sc[np.where((ind >= s) & (ind<e))]
                         regs_list.append(reg_sc.tolist())
@@ -540,19 +487,6 @@ class TSAL:
         iteration['reg_start_end'] = self.st_end
         iteration['regions_heuristic_scores'] = self.reg_scores #to store heuristics for region
         iteration['prop_label'] = self.y_true_train[self.queried_indices].tolist()
-        self.select_scores = []
-        if not self.al_name in ['random','utility']:
-            for pt in self.queried_indices:
-                for ee,tups in enumerate(self.st_end):
-                    s,e = tups
-                    rng = range(s,e)
-                    if pt in rng:
-                        dummy = np.zeros(len(self.y))
-                        dummy[s:e] = self.reg_scores[self.al_name][ee]
-                        self.select_scores.append(dummy[pt])
-                        break
-        else:
-            self.select_scores = [None]*len(self.queried_indices)
 
         iteration['selected_points_scores'] = self.select_scores #store only primary score of selected point
         print("propagator initialized")
@@ -578,8 +512,6 @@ class TSAL:
                 reg_preds.append(self.y_pred[s:e].tolist())
             iteration['reg_preds'] = reg_preds
             iteration['reg_start_end'] = self.st_end
-            if self.al_name in ['random','utility']:
-                self.select_scores = [None]*len(self.queried_indices)
             iteration['selected_points_scores'] = self.select_scores #store only primary score of selected point
             iteration['regions_heuristic_scores'] = self.reg_scores #to store heuristics for region
             print(str(query_step) + "/" + str(self.total_num_query_step), end=' ')

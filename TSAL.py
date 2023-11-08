@@ -250,6 +250,7 @@ class TSAL:
                 start = ind-min_dist 
                 end = ind+min_dist+1
             reg_start_end_list.append((start,end))
+        self.reg_start_end_list = reg_start_end_list
         return reg_start_end_list
     
     def zero_iteration(self):
@@ -453,7 +454,7 @@ class TSAL:
         self.model_fitting()
         print("classifier initialized")
         self.y_pred = self.model_manager.model.predict(X_long=self.X_train, file_boundaries=self.file_boundaries_train)
-        iteration['indices'] = self.queried_indices
+        iteration['indices'] = self.queried_indices.copy()
         iteration['num_labeled'] = num_total_query
         self.total_queried_indices = self.queried_indices
 
@@ -479,7 +480,7 @@ class TSAL:
         self.zero_iteration()
         #for storing preds of region
         reg_preds = []
-        for tups in self.st_end:
+        for tups in self.reg_start_end_list:
             s,e = tups
             reg_preds.append(self.y_pred[s:e].tolist())
 
@@ -502,12 +503,12 @@ class TSAL:
             json_i += 1
             iteration = {}
             iteration['num_labeled'] = self.num_queried_timestamp_per_al_step
-            iteration['indices'] = self.queried_indices.tolist()
+            iteration['indices'] = self.queried_indices.tolist().copy()
             iteration['prop_label'] = self.y_true_train[self.queried_indices].tolist()
             iteration['y_pred'] = self.y_pred[self.total_queried_indices].tolist()
             #for storing preds of region
             reg_preds = []
-            for tups in self.st_end:
+            for tups in self.reg_start_end_list:
                 s,e = tups
                 reg_preds.append(self.y_pred[s:e].tolist())
             iteration['reg_preds'] = reg_preds

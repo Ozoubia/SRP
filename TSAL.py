@@ -271,6 +271,7 @@ class TSAL:
             score_list, indices_list = self.query_scoring(uncertainty, data_collection=True)
             scor_dict[temp_al_strat] = (score_list, indices_list)
         
+        self.al_name = OG_AL #to get original strategy back
         #to get the score of selected indices
         if  OG_AL in ['badge','core']:
             sc,id = scor_dict[self.al_name]
@@ -287,7 +288,6 @@ class TSAL:
                 sel_score.append(ks[kid])
             self.select_scores = sel_score
 
-        self.al_name = OG_AL #to get original strategy back
         reg_st_ed_lst = self.get_regions(self.queried_indices)
         ## to store the scores of regions
         reg_scores_dict = {}
@@ -373,7 +373,8 @@ class TSAL:
                 uncertainty = self.timestamp_uncertainty(self.y_pred)
                 score_list, indices_list = self.query_scoring(uncertainty, data_collection=True)
                 scor_dict[temp_al_strat] = (score_list, indices_list)
-
+            
+            self.al_name = OG_AL #to get original strategy back
             if  OG_AL in ['badge','core']:
                 sc,id = scor_dict[self.al_name]
                 sel_score = []
@@ -389,7 +390,6 @@ class TSAL:
                     sel_score.append(ks[kid])
                 self.select_scores = sel_score
 
-            self.al_name = OG_AL #to get original strategy back
             reg_st_ed_lst = self.get_regions(self.queried_indices)
             ## to store the scores of regions
             reg_scores_dict = {}
@@ -485,6 +485,7 @@ class TSAL:
             reg_preds.append(self.y_pred[s:e].tolist())
 
         iteration['reg_preds'] = reg_preds
+        iteration['true_reg_start_end'] = self.reg_start_end_list
         iteration['reg_start_end'] = self.st_end
         iteration['regions_heuristic_scores'] = self.reg_scores #to store heuristics for region
         iteration['prop_label'] = self.y_true_train[self.queried_indices].tolist()
@@ -512,6 +513,7 @@ class TSAL:
                 s,e = tups
                 reg_preds.append(self.y_pred[s:e].tolist())
             iteration['reg_preds'] = reg_preds
+            iteration['true_reg_start_end'] = self.reg_start_end_list
             iteration['reg_start_end'] = self.st_end
             iteration['selected_points_scores'] = self.select_scores #store only primary score of selected point
             iteration['regions_heuristic_scores'] = self.reg_scores #to store heuristics for region

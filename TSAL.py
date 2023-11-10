@@ -240,7 +240,7 @@ class TSAL:
                 start = ind-min_dist 
                 end = ind+min_dist+1
             elif (ind > label_bound[-1]):
-                min_dist = min(ind-label_bound[-1],label_bound[-1]-ind)
+                min_dist = min(ind-label_bound[-1],len(self.y_seg)-ind)
                 start = ind-min_dist 
                 end = ind+min_dist+1
             if ind in label_bound_means:
@@ -284,8 +284,8 @@ class TSAL:
         else:
             sc,id = scor_dict[self.al_name]
             sel_score = []
-            for ks,kid in zip(sc,id):
-                sel_score.append(ks[kid])
+            for kid in self.queried_indices:
+                sel_score.append(sc[kid])
             self.select_scores = sel_score
 
         reg_st_ed_lst = self.get_regions(self.queried_indices)
@@ -386,8 +386,8 @@ class TSAL:
             else:
                 sc,id = scor_dict[self.al_name]
                 sel_score = []
-                for ks,kid in zip(sc,id):
-                    sel_score.append(ks[kid])
+                for kid in self.queried_indices:
+                    sel_score.append(sc[kid])
                 self.select_scores = sel_score
 
             reg_st_ed_lst = self.get_regions(self.queried_indices)

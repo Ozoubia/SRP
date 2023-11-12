@@ -249,7 +249,13 @@ class TSAL:
             else:
                 start = ind-min_dist 
                 end = ind+min_dist+1
-            reg_start_end_list.append((start,end))
+            try:
+                start = float(start)
+                end = float(end)
+            except:
+                pass
+
+            reg_start_end_list.append([start,end])
         self.reg_start_end_list = reg_start_end_list
         return reg_start_end_list
     
@@ -490,7 +496,7 @@ class TSAL:
         iteration['regions_heuristic_scores'] = self.reg_scores #to store heuristics for region
         iteration['prop_label'] = self.y_true_train[self.queried_indices].tolist()
 
-        iteration['selected_points_scores'] = self.select_scores.tolist() #store only primary score of selected point
+        iteration['selected_points_scores'] = self.select_scores #store only primary score of selected point
         print("propagator initialized")
         for query_step in range(self.total_num_query_step):
             num_total_query += self.num_queried_timestamp_per_al_step

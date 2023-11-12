@@ -250,8 +250,8 @@ class TSAL:
                 start = ind-min_dist 
                 end = ind+min_dist+1
             try:
-                start = float(start)
-                end = float(end)
+                start = int(start)
+                end = int(end)
             except:
                 pass
 

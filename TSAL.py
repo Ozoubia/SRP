@@ -283,7 +283,7 @@ class TSAL:
             sc,id = scor_dict[self.al_name]
             sel_score = []
             for ks,kid in zip(sc,id):
-                sel_score.append(ks[kid])
+                sel_score.append(float(ks[kid]))
             self.select_scores = sel_score
         elif OG_AL in ['random','utility']:
             self.select_scores = [None]*len(self.queried_indices)
@@ -291,7 +291,7 @@ class TSAL:
             sc,id = scor_dict[self.al_name]
             sel_score = []
             for kid in self.queried_indices:
-                sel_score.append(sc[kid])
+                sel_score.append(float(sc[kid]))
             self.select_scores = sel_score
 
         reg_st_ed_lst = self.get_regions(self.queried_indices)
@@ -385,7 +385,7 @@ class TSAL:
                 sc,id = scor_dict[self.al_name]
                 sel_score = []
                 for ks,kid in zip(sc,id):
-                    sel_score.append(ks[kid])
+                    sel_score.append(float(ks[kid]))
                 self.select_scores = sel_score
             elif OG_AL in ['random','utility']:
                 self.select_scores = [None]*len(self.queried_indices)
@@ -393,7 +393,7 @@ class TSAL:
                 sc,id = scor_dict[self.al_name]
                 sel_score = []
                 for kid in self.queried_indices:
-                    sel_score.append(sc[kid])
+                    sel_score.append(float(sc[kid]))
                 self.select_scores = sel_score
 
             reg_st_ed_lst = self.get_regions(self.queried_indices)

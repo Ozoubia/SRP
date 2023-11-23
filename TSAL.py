@@ -13,6 +13,8 @@ import json
 from scipy import stats, signal
 import matplotlib.pyplot as plt
 from eval import f_score
+import pandas as pd
+import pickle
 
 class TSAL:
     def __init__(self, data_name, model_name, input_length, init_ratio, total_num_query_step, num_epoch, batch_size,
@@ -111,7 +113,7 @@ class TSAL:
         elif self.al_name == "random":
             score_list = np.random.rand(len(indices_list))
         elif self.al_name == "utility":
-            labeled_or_not_proped = np.copy(self.labeled_or_not_propagated)
+            labeled_or_not_proped = np.copy(self.labeled_or_not_propagated_before_prop)
             indices_list = np.where(labeled_or_not_proped == 0)[0]
             score_list = np.random.rand(len(indices_list))
 
@@ -226,35 +228,33 @@ class TSAL:
             raise ValueError("Not proper scoring name")
         return score_list, indices_list
     
-    def get_regions(self,indices):
+    def get_regions(self, indices):
         label_bound = np.arange(len(self.y_seg))[self.y_seg == 1]
-        label_bound_means = [int((label_bound[i] + label_bound[i + 1]) / 2) for i in range(len(label_bound) - 1)]
         reg_start_end_list = []
         for ind in indices:
             idx = np.argmax(label_bound>ind)
             reg_end = label_bound[idx]
             reg_start = label_bound[idx - 1]
-            min_dist = min(reg_end-ind,ind-reg_start)
             if (ind < label_bound[0]):
-                min_dist = min(label_bound[0]-ind,ind-0)
-                start = ind-min_dist 
-                end = ind+min_dist+1
+                reg_start = 0
             elif (ind > label_bound[-1]):
-                min_dist = min(ind-label_bound[-1],len(self.y_seg)-ind)
-                start = ind-min_dist 
-                end = ind+min_dist+1
-            if ind in label_bound_means:
-                start = ind-min_dist 
-                end = ind+min_dist
+                reg_end = len(self.y_seg)
+            min_dist = min(reg_end-ind,ind-reg_start)
+            if min_dist > 25:
+                start = ind - 25
+                end = ind + 26
             else:
-                start = ind-min_dist 
-                end = ind+min_dist+1
+                if (ind-reg_start) < (reg_end-ind):
+                    start = reg_start
+                    end = ind+(ind-reg_start) + 1
+                else:
+                    start = ind - (reg_end-ind) + 1
+                    end = reg_end
             try:
                 start = int(start)
                 end = int(end)
             except:
                 pass
-
             reg_start_end_list.append([start,end])
         self.reg_start_end_list = reg_start_end_list
         return reg_start_end_list
@@ -420,6 +420,7 @@ class TSAL:
             self.reg_scores = reg_scores_dict
             self.labeled_or_not_propagated_before_prop = np.array([])
             prop_indices = np.where(self.labeled_or_not_propagated == 1)[0].astype(np.int64)
+            
 
     def model_fitting(self):
         if not self.is_label_propagation:  # if label propagation is not allowed, use original data
@@ -429,7 +430,91 @@ class TSAL:
         self.model_manager.load_train_data(self.X_train, self.y, self.y_seg, self.labeled_or_not_propagated, self.file_boundaries_train)
         self.model_manager.train_model(self.num_epoch,self.batch_size, is_test=False)
 
+    def preprocess_data(self, val):
+        tot_data = []
+        row_ind = 0
+        indices = val['indices']
+        st_end = val['reg_start_end']
+        for i in range(len(indices)):
+            data = {}
+            data['pt'] = indices[i]
+            data['margin_heuristic_score'] = val['regions_heuristic_scores']['margin'][i]
+            data['entropy_heuristic_score'] = val['regions_heuristic_scores']['entropy'][i]
+            data['conf_heuristic_score'] = val['regions_heuristic_scores']['conf'][i]
+            data['badge_heuristic_score'] = val['regions_heuristic_scores']['badge'][i]
+            data['core_heuristic_score'] = val['regions_heuristic_scores']['core'][i]
+            data['reg_preds'] = val['reg_preds'][i]
+            s,e = val['true_reg_start_end'][i]
+            data['y_pred'] = val['reg_preds'][i][indices[i]-s]
+            hit = False
+            for reg_i,(s,e) in enumerate(val['reg_start_end']):
+                if indices[i] in range(s,e):
+                    hit = True
+            data['Plateau_W'] = val['Pleatue_W'][reg_i]
+            data['Plateau_S'] = val['Pleatue_S'][reg_i]
+            data['Plateau_reg_width'] = e-s
+            data['true_reg_start_end'] = val['true_reg_start_end'][i]
+            if hit == False:
+                print('pro')
+            tot_data.append(data)     
+        return pd.DataFrame(tot_data) 
+
+    def make_histogram(self, processed_data):
+        X = np.zeros((len(processed_data),65))
+        y = np.zeros((len(processed_data),1))
+        for i,r in processed_data.iterrows():
+            X[i,0] = r['pt']
+            
+            #margin
+            bins =  [-np.inf, -9.00001238e-01, -8.00002476e-01, -7.00003713e-01, -6.00004951e-01, -5.00006189e-01, -4.00007427e-01, -3.00008665e-01, -2.00009902e-01, -1.00011140e-01, np.inf]
+            X[i,1:11] = np.histogram(r['margin_heuristic_score'], bins)[0]
+            
+            #entropy
+            bins =  [-np.inf, 2.47268904e-01, 4.94537515e-01, 7.41806127e-01,
+                9.89074739e-01, 1.23634335e+00, 1.48361196e+00, 1.73088057e+00,
+                1.97814919e+00, 2.22541780e+00, np.inf]
+            X[i,11:21] = np.histogram(r['entropy_heuristic_score'], bins)[0]
+            
+            #conf
+            bins =   [-np.inf, -0.91035276, -0.82070553, -0.73105829, -0.64141106,
+                -0.55176382, -0.46211659, -0.37246935, -0.28282211, -0.19317488, np.inf]
+            X[i,21:31] = np.histogram(r['conf_heuristic_score'], bins)[0]
+            
+            #badge
+            bins = [0.00000000e+00, 5.74823908e-11, 1.14964782e-10, 1.72447173e-10,
+            2.29929563e-10, 2.87411954e-10, 3.44894345e-10, 6.89788690e-07,
+            1.10366190e-05, 1.24161964e-05, np.inf]
+            X[i,31:41] = np.histogram(r['badge_heuristic_score'], bins)[0]
+            
+            #core
+            bins = [-np.inf,  1.43876252e-07, 2.87752503e-07, 4.31628755e-07,  7.19381258e-07, 1.43876252e-06, 2.15814377e-06, 2.87752503e-06, 3.59690629e-06, 4.31628755e-06, np.inf]
+            X[i,41:51] = np.histogram(r['core_heuristic_score'], bins)[0]
+            
+            #reg preds
+            bins = [-np.inf,  2.47268632e-01,  4.94537264e-01,  7.41805896e-01, 9.89074528e-01,  1.23634316e+00,  1.48361179e+00,  1.73088042e+00, 1.97814906e+00,  2.22541769e+00,  np.inf]
+            X[i,51:61] =np.histogram([-np.dot(y, np.log(np.array(y)+ 1e-12)) for y in r['reg_preds']],bins)[0]
+            
+            #y preds
+            X[i,61] = -np.dot(r['y_pred'], np.log(np.array(r['y_pred'])+ 1e-12))
+            
+            #pleatue_w
+            X[i,62] = r['Plateau_W']
+            
+            #pleatue_s
+            X[i,63] = r['Plateau_S']
+            #plat_reg_width
+            X[i,64] = r['Plateau_reg_width']
+            
+            #reg_start_end
+            st,ed = r['true_reg_start_end']
+            y[i,0] = ed-st
+        return X,y
+    
     def doAL(self, num_query_ratio=0.005, is_semi_supervised=False,  eta=0.8):
+        with open('xgb_models/model.pkl', 'rb') as file:
+            xgb_model = pickle.load(file)
+        if not os.path.exists('Logged'):
+            os.makedirs('Logged')
         jsondata = {}
         iteration = {}
         json_i = 0
@@ -501,12 +586,22 @@ class TSAL:
         for query_step in range(self.total_num_query_step):
             num_total_query += self.num_queried_timestamp_per_al_step
             self.acquisition()
-            self.model_fitting()
+            
             iteration['Pleatue_C'] = list(map(float,self.Plateau.json_pleateau_c))
             iteration['Pleatue_W'] = list(map(float,self.Plateau.json_pleateau_w))
             iteration['Pleatue_S'] = list(map(float,self.Plateau.json_pleateau_s))
+            processed_data = self.preprocess_data(iteration)
+            data_X, data_y = self.make_histogram(processed_data)
+            xgb_reg_width = xgb_model.predict(data_X)
+            self.label_propagation_XGBoost(data_X[:,0].tolist(), xgb_reg_width.tolist())
+            self.model_fitting()
+            
             if json_i == 0:
                 jsondata[f'iteration {json_i}'] = iteration
+
+            # After creating the DataFrame (assuming it's named 'df')
+            processed_data.to_csv(f'Logged/iteration_{json_i}.csv', index=False)
+
             json_i += 1
             iteration = {}
             iteration['num_labeled'] = self.num_queried_timestamp_per_al_step
@@ -568,6 +663,38 @@ class TSAL:
             return [num_labeled, num_labeled_propagated, test_acc, prop_accuracy, prop_mean_iou, boundary_accuracy, plateau_log]
         else:
             return [num_labeled, num_labeled_propagated, test_acc, prop_accuracy, prop_mean_iou, boundary_accuracy]
+
+    #Label propagation module based on XGBoost Model
+    def label_propagation_XGBoost(self, indx_list, reg_wdth):
+        """
+        The input to this function will be particular list of indicies of the points that the active learning has selected.
+        Another input to this function will be the width that the XGBoost model has predicted for all of these different regions.
+        So let's say if active learning selects 85 points so indices list will have a length of 85 and so does the width list.
+        Here for the sake of demonstration, I have created a dummy variables indx_list and reg_wdth that replicates the functionality
+        of the indicies list and reg width list. You can code in whatever logic you want, you can store the indices list and region width 
+        predicted by the XGBoost model in a class variable. This way the input to this function would remain self. In short, feel free to follow
+        whatever you think works best. 
+        """
+        y_ref = np.copy(self.y_true_train)
+        self.labeled_or_not_propagated = np.copy(self.labeled_or_not)
+        self.y = np.copy(self.y_true_train)
+        self.y_seg = np.copy(self.y_seg_true)
+        boundary_index = np.where(self.y_seg_true_train > self.boundary_threshold)[0]  # true boundary indices
+        self.segmenter_acc = np.sum(self.y_seg_true[boundary_index.tolist()] == 1) / len(boundary_index)
+
+        boundary_index = []
+        for index, region_width in zip(indx_list, reg_wdth):
+            region_width = np.ceil(region_width)
+            if len(self.X) % 2 == 0:
+                start = int(index) - int(region_width/2)
+                end = int(index) + int(region_width/2)
+            else:
+                start = int(index) - int(region_width/2)
+                end = int(index) + int(region_width/2) + 1
+            self.y[start:end] = y_ref[int(index)]
+            self.labeled_or_not_propagated[start:end] = 1
+            boundary_index += [start, end]
+        self.segmenter_acc = np.sum(self.y_seg_true[boundary_index] == 1) / len(boundary_index)
 
     def label_propagation(self):
         y_ref = np.copy(self.y_true_train)

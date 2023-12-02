@@ -243,7 +243,6 @@ class TSAL:
                 start = ind - 150
                 end = ind + 150 + 1
             else:
-                print(ind-reg_start,reg_end-ind)
                 if (ind-reg_start) > (reg_end-ind):
                     start = ind - (reg_end-ind) + 1
                     end = reg_end

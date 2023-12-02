@@ -229,27 +229,27 @@ class TSAL:
         return score_list, indices_list
     
     def get_regions(self, indices):
-        label_bound = np.arange(len(self.y_seg))[self.y_seg == 1]
+        label_bound = [0, len(self.y_seg)-1]
         reg_start_end_list = []
         for ind in indices:
-            idx = np.argmax(label_bound>ind)
-            reg_end = label_bound[idx]
-            reg_start = label_bound[idx - 1]
-            if (ind < label_bound[0]):
+            reg_start = np.max(ind - 150, label_bound[0])
+            reg_end = min(ind + 150, label_bound[1])
+            if (ind < 150):
                 reg_start = 0
-            elif (ind > label_bound[-1]):
+            elif (ind > label_bound[-1]-150):
                 reg_end = len(self.y_seg)
             min_dist = min(reg_end-ind,ind-reg_start)
-            if min_dist > 25:
-                start = ind - 25
-                end = ind + 26
+            if min_dist > 150:
+                start = ind - 150
+                end = ind + 150 + 1
             else:
-                if (ind-reg_start) < (reg_end-ind):
-                    start = reg_start
-                    end = ind+(ind-reg_start) + 1
-                else:
+                print(ind-reg_start,reg_end-ind)
+                if (ind-reg_start) > (reg_end-ind):
                     start = ind - (reg_end-ind) + 1
                     end = reg_end
+                else:
+                    start = reg_start
+                    end = ind + (ind-reg_start) + 1
             try:
                 start = int(start)
                 end = int(end)

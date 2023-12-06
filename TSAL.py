@@ -591,7 +591,8 @@ class TSAL:
             iteration['Pleatue_S'] = list(map(float,self.Plateau.json_pleateau_s))
             processed_data = self.preprocess_data(iteration)
             data_X, data_y = self.make_histogram(processed_data)
-            xgb_reg_width = np.clip(xgb_model.predict(data_X[:,1:61]/300).reshape(-1),10,301) #clipping the predicted regions between these values
+            data_X[:,1:61] = data_X[:,1:61]/300
+            xgb_reg_width = np.clip(xgb_model.predict(data_X).reshape(-1),10,301) #clipping the predicted regions between these values
 
             self.label_propagation_XGBoost(data_X[:,0].tolist(), xgb_reg_width.tolist())
             self.model_fitting()

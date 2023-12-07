@@ -362,7 +362,10 @@ class TSAL:
             query_indices = np.random.choice(np.arange(self.num_avail),size=self.num_queried_timestamp_per_al_step).tolist()
             self.labeled_or_not[query_indices] = 1  # oracle-label is done
             self.queried_indices = query_indices
-            self.total_queried_indices += self.queried_indices.tolist()
+            try:
+                self.total_queried_indices += self.queried_indices.tolist()
+            except:
+                self.total_queried_indices += self.queried_indices
             print(indices_list[selected_qwin])
             print("less number acquired through AL")
         if self.is_label_propagation:
@@ -591,7 +594,7 @@ class TSAL:
             iteration['Pleatue_S'] = list(map(float,self.Plateau.json_pleateau_s))
             processed_data = self.preprocess_data(iteration)
             data_X, data_y = self.make_histogram(processed_data)
-            data_X[:,1:61] = data_X[:,1:61]/data_y
+            data_X[:,1:61] = data_X[:,1:61]/300
             xgb_reg_width = np.clip(xgb_model.predict(data_X).reshape(-1),10,301) #clipping the predicted regions between these values
 
             self.label_propagation_XGBoost(data_X[:,0].tolist(), xgb_reg_width.tolist())

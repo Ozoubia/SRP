@@ -595,7 +595,7 @@ class TSAL:
             processed_data = self.preprocess_data(iteration)
             data_X, data_y = self.make_histogram(processed_data)
             data_X[:,1:61] = data_X[:,1:61]/300
-            xgb_reg_width = np.clip(xgb_model.predict(data_X).reshape(-1),10,9999999) #clipping the predicted regions between these values
+            xgb_reg_width = np.clip(xgb_model.predict(data_X).reshape(-1),10,301) #clipping the predicted regions between these values
 
             self.label_propagation_XGBoost(data_X[:,0].tolist(), xgb_reg_width.tolist())
             self.model_fitting()

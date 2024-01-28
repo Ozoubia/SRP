@@ -7,6 +7,7 @@ import numpy as np
 from scipy.ndimage import gaussian_filter1d
 from operator import itemgetter
 import time
+import ast
 from sklearn.metrics import pairwise_distances
 import pdb
 import json
@@ -595,8 +596,8 @@ class TSAL:
             processed_data = self.preprocess_data(iteration)
             data_X, data_y = self.make_histogram(processed_data)
             data_X[:,1:61] = data_X[:,1:61]/300
-            xgb_reg_width = np.clip(xgb_model.predict(data_X).reshape(-1),10,301) #clipping the predicted regions between these values
-
+            #xgb_reg_width = np.clip(xgb_model.predict(data_X).reshape(-1),10,301) #clipping the predicted regions between these values
+            xgb_reg_width = np.full_like(data_y, 100)
             self.label_propagation_XGBoost(data_X[:,0].tolist(), xgb_reg_width.tolist())
             self.model_fitting()
             train_acc = self.model_manager.test_train_model(bg_class=self.bg_class)[0]
@@ -670,6 +671,52 @@ class TSAL:
         else:
             return [num_labeled, num_labeled_propagated, test_acc, prop_accuracy, prop_mean_iou, boundary_accuracy]
 
+    #function for postprocessing
+    def post_process(self):
+        # Path to the parent directory
+        parent_dir = '/content/SRP/Logged'
+
+        # List to store the resulting numpy arrays
+        result_arrays = []
+
+        # Iterate through each run folder
+        for run_folder in os.listdir(parent_dir):
+            run_path = os.path.join(parent_dir, run_folder)
+
+            # Check if the item is a directory
+            if os.path.isdir(run_path):
+                run_arrays = []  # List to store numpy arrays for each run
+
+                # Iterate through each iteration CSV file
+                for iteration_file in os.listdir(run_path):
+                    iteration_path = os.path.join(run_path, iteration_file)
+
+                    # Check if the item is a file and ends with '.csv'
+                    if os.path.isfile(iteration_path) and iteration_file.endswith('.csv'):
+                        # Read the CSV file into a DataFrame
+                        df = pd.read_csv(iteration_path)
+                        for j in list(range(1,8)):
+                            for e in range(len(df)):
+                                df.iloc[e,j] = df.iloc[e,j].replace(', nan','')
+                                df.iloc[e,j] = df.iloc[[e],j].apply(lambda x:ast.literal_eval(x))
+                        df.iloc[:,11] = df.iloc[:,11].apply(lambda x:ast.literal_eval(x))
+
+                        # Apply make_histogram function and append the result to run_arrays
+                        rx, ry = self.make_histogram(df)
+                        result = np.hstack((rx,ry))
+                        run_arrays.append(result)
+
+                # Concatenate the arrays for each run and append to the result_arrays
+                if run_arrays:
+                    run_result = np.concatenate(run_arrays)
+                    result_arrays.append(run_result)
+
+        # Concatenate the arrays for all runs
+        final_result = np.concatenate(result_arrays)
+        file_name = self.al_name+'_'+'logged.npy'
+        np.save(file_name, final_result)
+
+    
     #Label propagation module based on XGBoost Model
     def label_propagation_XGBoost(self, indx_list, reg_wdth):
         """

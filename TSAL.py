@@ -666,6 +666,8 @@ class TSAL:
         with open(self.al_name+'data.json', 'w') as json_file:
             json.dump(jsondata,json_file)
 
+        self.post_process()
+
         if len(plateau_log) > 0:
             return [num_labeled, num_labeled_propagated, test_acc, prop_accuracy, prop_mean_iou, boundary_accuracy, plateau_log]
         else:

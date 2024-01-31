@@ -462,6 +462,57 @@ class TSAL:
             tot_data.append(data)     
         return pd.DataFrame(tot_data) 
 
+    def post_make_histogram(self, processed_data):
+        X = np.zeros((len(processed_data),65))
+        y = np.zeros((len(processed_data),1))
+        for i,r in processed_data.iterrows():
+            X[i,0] = r['pt']
+
+            #margin
+            bins =  [-np.inf, -9.00001238e-01, -8.00002476e-01, -7.00003713e-01, -6.00004951e-01, -5.00006189e-01, -4.00007427e-01, -3.00008665e-01, -2.00009902e-01, -1.00011140e-01, np.inf]
+            X[i,1:11] = np.histogram(r['margin_heuristic_score'].iloc[0], bins)[0]
+
+            #entropy
+            bins =  [-np.inf, 2.47268904e-01, 4.94537515e-01, 7.41806127e-01,
+                9.89074739e-01, 1.23634335e+00, 1.48361196e+00, 1.73088057e+00,
+                1.97814919e+00, 2.22541780e+00, np.inf]
+            X[i,11:21] = np.histogram(r['entropy_heuristic_score'].iloc[0], bins)[0]
+
+            #conf
+            bins =   [-np.inf, -0.91035276, -0.82070553, -0.73105829, -0.64141106,
+                -0.55176382, -0.46211659, -0.37246935, -0.28282211, -0.19317488, np.inf]
+            X[i,21:31] = np.histogram(r['conf_heuristic_score'].iloc[0], bins)[0]
+
+            #badge
+            bins = [0.00000000e+00, 5.74823908e-11, 1.14964782e-10, 1.72447173e-10,
+            2.29929563e-10, 2.87411954e-10, 3.44894345e-10, 6.89788690e-07,
+            1.10366190e-05, 1.24161964e-05, np.inf]
+            X[i,31:41] = np.histogram(r['badge_heuristic_score'].iloc[0], bins)[0]
+
+            #core
+            bins = [-np.inf,  1.43876252e-07, 2.87752503e-07, 4.31628755e-07,  7.19381258e-07, 1.43876252e-06, 2.15814377e-06, 2.87752503e-06, 3.59690629e-06, 4.31628755e-06, np.inf]
+            X[i,41:51] = np.histogram(r['core_heuristic_score'].iloc[0], bins)[0]
+
+            #reg preds
+            bins = [-np.inf,  2.47268632e-01,  4.94537264e-01,  7.41805896e-01, 9.89074528e-01,  1.23634316e+00,  1.48361179e+00,  1.73088042e+00, 1.97814906e+00,  2.22541769e+00,  np.inf]
+            X[i,51:61] =np.histogram([-np.dot(y, np.log(np.array(y)+ 1e-12)) for y in r['reg_preds'].iloc[0]],bins)[0]
+
+            #y preds
+            X[i,61] = -np.dot(r['y_pred'].iloc[0], np.log(np.array(r['y_pred'].iloc[0])+ 1e-12))
+
+            #pleatue_w
+            X[i,62] = r['Plateau_W']
+
+            #pleatue_s
+            X[i,63] = r['Plateau_S']
+            #plat_reg_width
+            X[i,64] = r['Plateau_reg_width']
+
+            #reg_start_end
+            st,ed = r['true_reg_start_end']
+            y[i,0] = ed-st
+        return np.hstack((X,y))
+    
     def make_histogram(self, processed_data):
         X = np.zeros((len(processed_data),65))
         y = np.zeros((len(processed_data),1))
@@ -681,40 +732,28 @@ class TSAL:
         # List to store the resulting numpy arrays
         result_arrays = []
 
-        # Iterate through each run folder
-        for run_folder in os.listdir(parent_dir):
-            run_path = os.path.join(parent_dir, run_folder)
+        # Iterate through each iteration CSV file
+        for iteration_file in os.listdir(parent_dir):
+            iteration_path = os.path.join(parent_dir, iteration_file)
 
-            # Check if the item is a directory
-            if os.path.isdir(run_path):
-                run_arrays = []  # List to store numpy arrays for each run
+            # Check if the item is a file and ends with '.csv'
+            if os.path.isfile(iteration_path) and iteration_file.endswith('.csv'):
+                # Read the CSV file into a DataFrame
+                df = pd.read_csv(iteration_path)
+                for j in list(range(1,8)):
+                    for e in range(len(df)):
+                        df.iloc[e,j] = df.iloc[e,j].replace(', nan','')
+                        df.iloc[e,j] = df.iloc[[e],j].apply(lambda x:ast.literal_eval(x))
+                df.iloc[:,11] = df.iloc[:,11].apply(lambda x:ast.literal_eval(x))
 
-                # Iterate through each iteration CSV file
-                for iteration_file in os.listdir(run_path):
-                    iteration_path = os.path.join(run_path, iteration_file)
+                # Apply make_histogram function and append the result to run_arrays
+                result = self.post_make_histogram(df)
+                result_arrays.append(result)
 
-                    # Check if the item is a file and ends with '.csv'
-                    if os.path.isfile(iteration_path) and iteration_file.endswith('.csv'):
-                        # Read the CSV file into a DataFrame
-                        df = pd.read_csv(iteration_path)
-                        for j in list(range(1,8)):
-                            for e in range(len(df)):
-                                df.iloc[e,j] = df.iloc[e,j].replace(', nan','')
-                                df.iloc[e,j] = df.iloc[[e],j].apply(lambda x:ast.literal_eval(x))
-                        df.iloc[:,11] = df.iloc[:,11].apply(lambda x:ast.literal_eval(x))
-
-                        # Apply make_histogram function and append the result to run_arrays
-                        rx, ry = self.make_histogram(df)
-                        result = np.hstack((rx,ry))
-                        run_arrays.append(result)
-
-                # Concatenate the arrays for each run and append to the result_arrays
-                if run_arrays:
-                    run_result = np.concatenate(run_arrays)
-                    result_arrays.append(run_result)
+        # Concatenate the arrays for each run and append to the result_arrays
+        final_result = np.concatenate(result_arrays)
 
         # Concatenate the arrays for all runs
-        final_result = np.concatenate(result_arrays)
         file_name = self.al_name+'_'+'logged.npy'
         np.save(file_name, final_result)
 

@@ -470,35 +470,35 @@ class TSAL:
 
             #margin
             bins =  [-np.inf, -9.00001238e-01, -8.00002476e-01, -7.00003713e-01, -6.00004951e-01, -5.00006189e-01, -4.00007427e-01, -3.00008665e-01, -2.00009902e-01, -1.00011140e-01, np.inf]
-            X[i,1:11] = np.histogram(r['margin_heuristic_score'].iloc[0], bins)[0]
+            X[i,1:11] = np.histogram(r['margin_heuristic_score'][0], bins)[0]
 
             #entropy
             bins =  [-np.inf, 2.47268904e-01, 4.94537515e-01, 7.41806127e-01,
                 9.89074739e-01, 1.23634335e+00, 1.48361196e+00, 1.73088057e+00,
                 1.97814919e+00, 2.22541780e+00, np.inf]
-            X[i,11:21] = np.histogram(r['entropy_heuristic_score'].iloc[0], bins)[0]
+            X[i,11:21] = np.histogram(r['entropy_heuristic_score'][0], bins)[0]
 
             #conf
             bins =   [-np.inf, -0.91035276, -0.82070553, -0.73105829, -0.64141106,
                 -0.55176382, -0.46211659, -0.37246935, -0.28282211, -0.19317488, np.inf]
-            X[i,21:31] = np.histogram(r['conf_heuristic_score'].iloc[0], bins)[0]
+            X[i,21:31] = np.histogram(r['conf_heuristic_score'][0], bins)[0]
 
             #badge
             bins = [0.00000000e+00, 5.74823908e-11, 1.14964782e-10, 1.72447173e-10,
             2.29929563e-10, 2.87411954e-10, 3.44894345e-10, 6.89788690e-07,
             1.10366190e-05, 1.24161964e-05, np.inf]
-            X[i,31:41] = np.histogram(r['badge_heuristic_score'].iloc[0], bins)[0]
+            X[i,31:41] = np.histogram(r['badge_heuristic_score'][0], bins)[0]
 
             #core
             bins = [-np.inf,  1.43876252e-07, 2.87752503e-07, 4.31628755e-07,  7.19381258e-07, 1.43876252e-06, 2.15814377e-06, 2.87752503e-06, 3.59690629e-06, 4.31628755e-06, np.inf]
-            X[i,41:51] = np.histogram(r['core_heuristic_score'].iloc[0], bins)[0]
+            X[i,41:51] = np.histogram(r['core_heuristic_score'][0], bins)[0]
 
             #reg preds
             bins = [-np.inf,  2.47268632e-01,  4.94537264e-01,  7.41805896e-01, 9.89074528e-01,  1.23634316e+00,  1.48361179e+00,  1.73088042e+00, 1.97814906e+00,  2.22541769e+00,  np.inf]
-            X[i,51:61] =np.histogram([-np.dot(y, np.log(np.array(y)+ 1e-12)) for y in r['reg_preds'].iloc[0]],bins)[0]
+            X[i,51:61] =np.histogram([-np.dot(y, np.log(np.array(y)+ 1e-12)) for y in r['reg_preds'][0]],bins)[0]
 
             #y preds
-            X[i,61] = -np.dot(r['y_pred'].iloc[0], np.log(np.array(r['y_pred'].iloc[0])+ 1e-12))
+            X[i,61] = -np.dot(r['y_pred'][0], np.log(np.array(r['y_pred'][0])+ 1e-12))
 
             #pleatue_w
             X[i,62] = r['Plateau_W']

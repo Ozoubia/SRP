@@ -208,7 +208,7 @@ class TSAL:
         self.labeled_or_not = np.copy(self.labeled_or_not_init)
         self.query_step = 0
         self.labeled_or_not_propagated_before_prop = np.array([])
-        self.num_queried_timestamp_per_al_step = int(num_query_ratio * self.total_length)
+        self.num_queried_timestamp_per_al_step = 200
 
         self.is_semi_supervised = is_semi_supervised
         self.segmenter_acc = 1 # init segmenter_acc

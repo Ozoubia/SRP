@@ -637,7 +637,7 @@ class TSAL:
 
         iteration['selected_points_scores'] = self.select_scores #store only primary score of selected point
         print("propagator initialized")
-        for query_step in range(self.total_num_query_step):
+        for query_step in range(15):
             num_total_query += self.num_queried_timestamp_per_al_step
             self.acquisition()
             

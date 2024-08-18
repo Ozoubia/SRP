@@ -239,7 +239,7 @@ class TSAL:
             self.Plateau.merge_and_split()
         self.plateau_log_per_step = []
         print("propagator initialized")
-        for query_step in range(self.total_num_query_step):
+        for query_step in range(15):
             num_total_query += self.num_queried_timestamp_per_al_step
             self.acquisition()
             self.model_fitting()
